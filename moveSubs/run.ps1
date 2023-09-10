@@ -1,6 +1,9 @@
 param($Timer)
 
+# Connect-AzAccount -TenantId 5d59f262-6579-4929-a1bb-3dfdd0a6bc78
+# Connect-AzAccount -TenantId c6b24d18-bbd0-4aec-b84c-e791e95a76e3
 Connect-AzAccount
+
 
 function getContext() {
     return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken "?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiyx&se=2023-09-17T16:48:03Z&st=2023-09-10T08:48:03Z&spr=https&sig=cTUIxPjLj8h96cBYK%2BSy%2BYGI94m8qoP%2BWUYMahK5WEQ%3D"
@@ -84,7 +87,6 @@ function writeNewVSSubsToStorageAccount($context) {
 
 function sendEmail($newVSSubs) {
     try {
-        Connect-MgGraph -Scopes Mail.Read
         # $table = @()
         # foreach ($item in $newVSSubs) {
         #     $row = "" | Select-Object SubscriptionID, SubscriptionName
@@ -92,34 +94,36 @@ function sendEmail($newVSSubs) {
         #     $row.name = $item.name
         #     $table += $row
         # }
-        $attachment = ".\newVSSubscriptions.csv"
-        $messageAttachement = [Convert]::ToBase64String([IO.File]::ReadAllBytes($attachment))
-        $params = @{
-            Message = @{
-                Subject      = "New Visual Studio Suscriptions have been Created"
-                Body         = @{
-                    ContentType = "Text"
-                    Content     = "Hello Admins,`n"
-                }
-                ToRecipients = @(
-                    @{
-                        EmailAddress = @{
-                            Address = "challspaceonline@gmail.com"
-                        }
-                    }
-                )
-                Attachments  = @(
-                    @{
-                        "@odata.type" = "#microsoft.graph.fileAttachment"
-                        Name          = $attachment
-                        ContentType   = "text/plain"
-                        ContentBytes  = $messageAttachement
-                    }
-                )
-            }
-        }
-        # A UPN can also be used as -UserId.
-        Send-MgUserMail -UserId 'chiemelieobidike@gmail.com' -BodyParameter $params
+        # $attachment = ".\newVSSubscriptions.csv"
+        # $messageAttachement = [Convert]::ToBase64String([IO.File]::ReadAllBytes($attachment))
+        # $params = @{
+        #     Message = @{
+        #         Subject      = "New Visual Studio Suscriptions have been Created"
+        #         Body         = @{
+        #             ContentType = "Text"
+        #             Content     = "Hello Admins,`n"
+        #         }
+        #         ToRecipients = @(
+        #             @{
+        #                 EmailAddress = @{
+        #                     Address = "challspaceonline@gmail.com"
+        #                 }
+        #             }
+        #         )
+        #         Attachments  = @(
+        #             @{
+        #                 "@odata.type" = "#microsoft.graph.fileAttachment"
+        #                 Name          = $attachment
+        #                 ContentType   = "text/plain"
+        #                 ContentBytes  = $messageAttachement
+        #             }
+        #         )
+        #     }
+        # }
+        # # A UPN can also be used as -UserId.
+        # Connect-MgGraph -Scopes Mail.Read -UseDeviceAuthentication
+        # Send-MgUserMail -UserId 'chiemelieobidike@gmail.com' -BodyParameter $params
+        .\Send-GraphMail.ps1 -To 'chiemelieobidike@gmail.com' -Subject "New Subscriptions have been Created" -MessageFormat HTML -Body "I love PowerShell Center" -DeliveryReport -ReadReport -Attachments .\newVSSubscriptions.csv -DocumentType 'text/plain'
     }
     catch {
         Write-Host "An error occurred on sendEmail:"
@@ -136,4 +140,11 @@ function main() {
     sendEmail
 }
 
+function cleanUp() {
+    Remove-Item .\subs\currentVSSubscriptions.csv
+    Remove-Item .\subs\oldVSSubscriptions.csv
+    Remove-Item .\newVSSubscriptions.csv
+}
+
 main
+cleanUp

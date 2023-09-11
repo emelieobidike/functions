@@ -4,7 +4,8 @@ Connect-AzAccount
 $sendEmail = $null
 
 function getContext() {
-    return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken "?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiyx&se=2023-09-17T16:48:03Z&st=2023-09-10T08:48:03Z&spr=https&sig=cTUIxPjLj8h96cBYK%2BSy%2BYGI94m8qoP%2BWUYMahK5WEQ%3D"
+    $token = Get-AzKeyVaultSecret -VaultName "secrets7t7" -Name "SASToken" -AsPlainText
+    return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken $token
 }
 
 function getOldVSSubs($context) {
@@ -61,12 +62,12 @@ function compareVSSubs() {
         if ($null -eq $newVSSubs) {
             $sendEmail = $false 
             Write-Host "No new subscriptions. Send email:" $sendEmail
-            return $sendEmail, $currentVSSubs | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            return $currentVSSubs | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
         }
         else {
             $sendEmail = $true
             Write-Host "New subscriptions. Send email:" $sendEmail
-            return $sendEmail, $newVSSubs | Select-Object SubscriptionName, SubscriptionID | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            return $newVSSubs | Select-Object SubscriptionName, SubscriptionID | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
         }
     }
     catch {
@@ -89,10 +90,12 @@ function getAccessToken() {
     #region Authentication
     #We use the client credentials flow as an example. For production use, REPLACE the code below with your preferred auth method. NEVER STORE CREDENTIALS IN PLAIN TEXT!!!
 
+    $client_secret = Get-AzKeyVaultSecret -VaultName "secrets7t7" -Name "moveVSSubsSecret" -AsPlainText
+
     #Variables to configure
     $tenantID = "c6b24d18-bbd0-4aec-b84c-e791e95a76e3" #your tenantID or tenant root domain
     $appID = "fa86c8a0-231d-423f-84ee-02b119aa066d" #the GUID of your app.
-    $client_secret = "nM.8Q~BLfGGj6b1HIOuoxvoyDSxMARrew796Cbzm" #client secret for the app
+    # $client_secret = "nM.8Q~BLfGGj6b1HIOuoxvoyDSxMARrew796Cbzm" #client secret for the app
 
     #Prepare token request
     $url = 'https://login.microsoftonline.com/' + $tenantId + '/oauth2/v2.0/token'
@@ -180,7 +183,7 @@ function main() {
 
 function cleanUp() {
     Remove-Item .\subs\currentVSSubscriptions.csv
-    Remove-Item .\subs\oldVSSubscriptions.csv
+    # Remove-Item .\subs\oldVSSubscriptions.csv
     Remove-Item .\newVSSubscriptions.csv
 }
 

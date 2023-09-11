@@ -1,6 +1,5 @@
 param($Timer)
 
-Connect-AzAccount
 $sendEmail = $null
 
 function getContext() {

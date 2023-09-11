@@ -12,7 +12,7 @@ function getOldVSSubs($context) {
         $DLBlob1HT = @{
             Blob        = 'oldVSSubscriptions.csv'
             Container   = 'subscriptions'
-            Destination = '.\subs'
+            Destination = '.\'
             Context     = $context
         }
         return Get-AzStorageBlobContent @DLBlob1HT -Force
@@ -43,7 +43,7 @@ function getCurrentVSSubs() {
                 $vsSubscriptions += $vsSubscriptionObject
             }
         }
-        $path = '.\subs\currentVSSubscriptions.csv'
+        $path = '.\currentVSSubscriptions.csv'
         return $vsSubscriptions | Export-Csv -Path $path -NoTypeInformation >$null 2>&1 -Force
     }
     catch {
@@ -181,8 +181,8 @@ function main() {
 }
 
 function cleanUp() {
-    Remove-Item .\subs\currentVSSubscriptions.csv
-    Remove-Item .\subs\oldVSSubscriptions.csv
+    Remove-Item .\currentVSSubscriptions.csv
+    Remove-Item .\oldVSSubscriptions.csv
     Remove-Item .\newVSSubscriptions.csv
 }
 

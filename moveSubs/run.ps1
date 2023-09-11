@@ -183,7 +183,7 @@ function main() {
 
 function cleanUp() {
     Remove-Item .\subs\currentVSSubscriptions.csv
-    # Remove-Item .\subs\oldVSSubscriptions.csv
+    Remove-Item .\subs\oldVSSubscriptions.csv
     Remove-Item .\newVSSubscriptions.csv
 }
 

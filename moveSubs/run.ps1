@@ -55,8 +55,8 @@ function getCurrentVSSubs() {
 
 function compareVSSubs() {
     try {
-        $oldVSSubs = Import-Csv .\subs\oldVSSubscriptions.csv
-        $currentVSSubs = Import-Csv .\subs\currentVSSubscriptions.csv
+        $oldVSSubs = Import-Csv .\oldVSSubscriptions.csv
+        $currentVSSubs = Import-Csv .\currentVSSubscriptions.csv
         $newVSSubs = Compare-Object -ReferenceObject @($currentVSSubs | Select-Object) -DifferenceObject @($oldVSSubs | Select-Object) -Property SubscriptionName, SubscriptionID | Where-Object SideIndicator -eq '<='
         if ($null -eq $newVSSubs) {
             $sendEmail = $false 

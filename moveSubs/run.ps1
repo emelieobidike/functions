@@ -3,7 +3,7 @@ param($Timer)
 $sendEmail = $null
 
 function getContext() {
-    $token = Get-AzKeyVaultSecret -VaultName "secrets7t7" -Name "SASToken" -AsPlainText
+    $token = Get-AzKeyVaultSecret -VaultName "secrets773" -Name "SASToken" -AsPlainText
     return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken $token
 }
 

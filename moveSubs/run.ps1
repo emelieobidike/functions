@@ -1,5 +1,22 @@
 param($Timer)
 
+function main() {
+    $vsSubscriptions = getCurrentVSSubs
+    if ($vsSubscriptions -eq 0) {
+        return
+    }
+    else {
+        $context = getContext
+        getOldVSSubs $context
+        $newVSSubs = compareVSSubs
+        if ($newVSSubs -eq $true) {
+            $clientSecretCredential = getClientSecretCredential
+            sendEmail $vsSubscriptions $clientSecretCredential $context
+        }
+        cleanUp
+    }
+}
+
 function getCurrentVSSubs() {
     try {
         $query = 'resourcecontainers | where type == "microsoft.resources/subscriptions" | project name, subscriptionId, properties.managementGroupAncestorsChain[0].name , properties.subscriptionPolicies.quotaId'
@@ -128,23 +145,6 @@ function writeNewVSSubsToStorageAccount($context) {
     catch {
         Write-Host "An error occurred on writeNewVSSubsToStorageAccount:"
         Write-Host $_
-    }
-}
-
-function main() {
-    $vsSubscriptions = getCurrentVSSubs
-    if ($vsSubscriptions -eq 0) {
-        return
-    }
-    else {
-        $context = getContext
-        getOldVSSubs $context
-        $newVSSubs = compareVSSubs
-        if ($newVSSubs -eq $true) {
-            $clientSecretCredential = getClientSecretCredential
-            sendEmail $vsSubscriptions $clientSecretCredential $context
-        }
-        cleanUp
     }
 }
 

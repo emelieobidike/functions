@@ -75,7 +75,7 @@ function compareVSSubs() {
 }
 
 function getClientSecretCredential() {
-    $client_secret = Get-AzKeyVaultSecret -VaultName "secrets7t7" -Name "moveVSSubsSecret" -AsPlainText
+    $client_secret = Get-AzKeyVaultSecret -VaultName "secrets773" -Name "moveVSSubsSecret" -AsPlainText
     $appID = "fa86c8a0-231d-423f-84ee-02b119aa066d"
     $clientSecretPass = ConvertTo-SecureString -String $client_secret -AsPlainText -Force
     return New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $appID, $clientSecretPass

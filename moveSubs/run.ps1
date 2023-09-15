@@ -25,7 +25,7 @@ function getCurrentVSSubs() {
         $vsSubscriptions = @()
         foreach ($subscription in $subscriptions) {
             if ($subscription.properties_subscriptionPolicies_quotaId.StartsWith($prefix) -and $subscription.properties_managementGroupAncestorsChain_0_name -ne "vs-mg") {
-                $vsSubscriptionObject = addVSSubProperties $item
+                $vsSubscriptionObject = addVSSubProperties $subscription
                 $vsSubscriptions += $vsSubscriptionObject
             }
         }
@@ -77,7 +77,6 @@ function compareVSSubs() {
         $currentVSSubs = Import-Csv .\currentVSSubscriptions.csv
         $newVSSubs = Compare-Object -ReferenceObject @($currentVSSubs | Select-Object) -DifferenceObject @($oldVSSubs | Select-Object) -Property SubscriptionName, SubscriptionID | Where-Object SideIndicator -eq '<='
         if ($null -eq $newVSSubs) {
-            $currentVSSubs | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
             return $false
         }
         else {
@@ -149,9 +148,12 @@ function writeNewVSSubsToStorageAccount($context) {
 }
 
 function cleanUp() {
+    $path = '.\newVSSubscriptions.csv'
+    if (Test-Path -Path $path) {
+        Remove-Item .\newVSSubscriptions.csv
+    }
     Remove-Item .\currentVSSubscriptions.csv
     Remove-Item .\oldVSSubscriptions.csv
-    Remove-Item .\newVSSubscriptions.csv
 }
 
 main

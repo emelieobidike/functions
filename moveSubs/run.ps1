@@ -1,6 +1,37 @@
 param($Timer)
 
-$sendEmail = $null
+function getCurrentVSSubs() {
+    try {
+        $query = 'resourcecontainers | where type == "microsoft.resources/subscriptions" | project name, subscriptionId, properties.managementGroupAncestorsChain[0].name , properties.subscriptionPolicies.quotaId'
+        $subscriptions = Search-AzGraph -Query $query
+        $prefix = "MSDN_"
+        $vsSubscriptions = @()
+        foreach ($subscription in $subscriptions) {
+            if ($subscription.properties_subscriptionPolicies_quotaId.StartsWith($prefix) -and $subscription.properties_managementGroupAncestorsChain_0_name -ne "vs-mg") {
+                $vsSubscriptionObject = addVSSubProperties $item
+                $vsSubscriptions += $vsSubscriptionObject
+            }
+        }
+        if ($vsSubscriptions.Length -ne 0) {
+            $path = '.\currentVSSubscriptions.csv'
+            $vsSubscriptions | Export-Csv -Path $path -NoTypeInformation >$null 2>&1 -Force
+        }
+        return $vsSubscriptions.Length
+    }
+    catch {
+        Write-Host "An error occurred on getCurrentVSSUbs:"
+        Write-Host $_
+    }
+    
+}
+
+function addVSSubProperties($subscription) {
+    $PropertyHash = [ordered]@{
+        SubscriptionID   = $subscription.subscriptionId
+        SubscriptionName = $subscription.name
+    }
+    return New-Object -TypeName PSObject -Property $PropertyHash
+}
 
 function getContext() {
     $token = Get-AzKeyVaultSecret -VaultName "secrets773" -Name "SASToken" -AsPlainText
@@ -23,50 +54,18 @@ function getOldVSSubs($context) {
     }
 }
 
-function addVSSubProperties($subscription) {
-    $PropertyHash = [ordered]@{
-        SubscriptionID   = $subscription.subscriptionId
-        SubscriptionName = $subscription.name
-    }
-    return New-Object -TypeName PSObject -Property $PropertyHash
-}
-
-function getCurrentVSSubs() {
-    try {
-        $query = 'resourcecontainers | where type == "microsoft.resources/subscriptions" | project name, subscriptionId, properties.managementGroupAncestorsChain[0].name , properties.subscriptionPolicies.quotaId'
-        $result = Search-AzGraph -Query $query
-        $prefix = "MSDN_"
-        $vsSubscriptions = @()
-        foreach ($item in $result) {
-            if ($item.properties_subscriptionPolicies_quotaId.StartsWith($prefix) && $item.properties_managementGroupAncestorsChain_0_name -ne "vs-mg") {
-                $vsSubscriptionObject = addVSSubProperties $item
-                $vsSubscriptions += $vsSubscriptionObject
-            }
-        }
-        $path = '.\currentVSSubscriptions.csv'
-        return $vsSubscriptions | Export-Csv -Path $path -NoTypeInformation >$null 2>&1 -Force
-    }
-    catch {
-        Write-Host "An error occurred on getCurrentVSSUbs:"
-        Write-Host $_
-    }
-    
-}
-
 function compareVSSubs() {
     try {
         $oldVSSubs = Import-Csv .\oldVSSubscriptions.csv
         $currentVSSubs = Import-Csv .\currentVSSubscriptions.csv
         $newVSSubs = Compare-Object -ReferenceObject @($currentVSSubs | Select-Object) -DifferenceObject @($oldVSSubs | Select-Object) -Property SubscriptionName, SubscriptionID | Where-Object SideIndicator -eq '<='
         if ($null -eq $newVSSubs) {
-            $sendEmail = $false 
-            Write-Host "No new subscriptions. Send email:" $sendEmail
-            return $currentVSSubs | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            $currentVSSubs | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            return $false
         }
         else {
-            $sendEmail = $true
-            Write-Host "New subscriptions. Send email:" $sendEmail
-            return $newVSSubs | Select-Object SubscriptionName, SubscriptionID | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            $newVSSubs | Select-Object SubscriptionName, SubscriptionID | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
+            return $true
         }
     }
     catch {
@@ -75,69 +74,24 @@ function compareVSSubs() {
     }
 }
 
-function writeNewVSSubsToStorageAccount($context) {
-    try {
-        Set-AzStorageBlobContent -Container 'subscriptions' -Context $context -File '.\newVSSubscriptions.csv' -Blob 'oldVSSubscriptions.csv' -Force
-    }
-    catch {
-        Write-Host "An error occurred on writeNewVSSubsToStorageAccount:"
-        Write-Host $_
-    }
-}
-
-function getAccessToken() {
-    #region Authentication
-    #We use the client credentials flow as an example. For production use, REPLACE the code below with your preferred auth method. NEVER STORE CREDENTIALS IN PLAIN TEXT!!!
-
+function getClientSecretCredential() {
     $client_secret = Get-AzKeyVaultSecret -VaultName "secrets7t7" -Name "moveVSSubsSecret" -AsPlainText
-
-    #Variables to configure
-    $tenantID = "c6b24d18-bbd0-4aec-b84c-e791e95a76e3" #your tenantID or tenant root domain
-    $appID = "fa86c8a0-231d-423f-84ee-02b119aa066d" #the GUID of your app.
-    # $client_secret = "nM.8Q~BLfGGj6b1HIOuoxvoyDSxMARrew796Cbzm" #client secret for the app
-
-    #Prepare token request
-    $url = 'https://login.microsoftonline.com/' + $tenantId + '/oauth2/v2.0/token'
-
-    $body = @{
-        grant_type    = "client_credentials"
-        client_id     = $appID
-        client_secret = $client_secret
-        scope         = "https://graph.microsoft.com/.default"
-    }
-
-    #Obtain the token
-    Write-Verbose "Authenticating..."
-    try { $tokenRequest = Invoke-WebRequest -Method Post -Uri $url -ContentType "application/x-www-form-urlencoded" -Body $body -UseBasicParsing -ErrorAction Stop }
-    catch { Write-Host "Unable to obtain access token, aborting..."; return }
-
-    $token = ($tokenRequest.Content | ConvertFrom-Json).access_token | ConvertTo-SecureString -AsPlainText -Force
-    return $token 
-
-    # $authHeader = @{
-    #     'Content-Type'  = 'application\json'
-    #     'Authorization' = "Bearer $token"
-    # }
-    #endregion Authentication
+    $appID = "fa86c8a0-231d-423f-84ee-02b119aa066d"
+    $clientSecretPass = ConvertTo-SecureString -String $client_secret -AsPlainText -Force
+    return New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $appID, $clientSecretPass
 }
 
-function sendEmail($token) {
+function sendEmail($newVSSubs, $clientSecret, $context) {
     try {
-        # $table = @()
-        # foreach ($item in $newVSSubs) {
-        #     $row = "" | Select-Object SubscriptionID, SubscriptionName
-        #     $row.id = $item.id
-        #     $row.name = $item.name
-        #     $table += $row
-        # }
         $attachment = ".\newVSSubscriptions.csv"
         $messageAttachement = [Convert]::ToBase64String([IO.File]::ReadAllBytes($attachment))
+        $subject = $newVSSubs -eq 1 ? "A New Visual Studio Subscription has been Created" : "New Visual Studio Subscriptions have been Created"
         $params = @{
             Message = @{
-                Subject      = "New Visual Studio Suscriptions have been Created"
+                Subject      = $subject
                 Body         = @{
                     ContentType = "Text"
-                    Content     = "Hello Admins,`n"
+                    Content     = "Hello Admins,`n$subject. Please check the attached spreadsheet and move to the correct management group. `n`nRegards."
                 }
                 ToRecipients = @(
                     @{
@@ -156,10 +110,10 @@ function sendEmail($token) {
                 )
             }
         }
-        # A UPN can also be used as -UserId.
-        Connect-MgGraph -AccessToken $token
-        Send-MgUserMail -UserId 'challspaceonline_live.com#EXT#@chiemelieobidikegmail.onmicrosoft.com' -BodyParameter $params
-        .\Send-GraphMail.ps1 -To 'chiemelieobidike@gmail.com' -Subject "New Subscriptions have been Created" -MessageFormat HTML -Body "I love PowerShell Center" -DeliveryReport -ReadReport -Attachments .\newVSSubscriptions.csv -DocumentType 'text/plain'
+        $tenantID = "c6b24d18-bbd0-4aec-b84c-e791e95a76e3"
+        Connect-MgGraph -TenantId $tenantID -ClientSecretCredential $clientSecret
+        Send-MgUserMail -UserId 'challspaceonline_live.com#EXT#@chiemelieobidikegmail.onmicrosoft.com' -BodyParameter $params -ErrorAction Stop
+        writeNewVSSubsToStorageAccount $context
     }
     catch {
         Write-Host "An error occurred on sendEmail:"
@@ -167,17 +121,31 @@ function sendEmail($token) {
     }
 }
 
-function main() {
-    $context = getContext
-    getOldVSSubs $context
-    getCurrentVSSubs
-    compareVSSubs
-    writeNewVSSubsToStorageAccount $context
-    $token = getAccessToken
-    if ($sendEmail -eq $true) {
-        sendEmail $token
+function writeNewVSSubsToStorageAccount($context) {
+    try {
+        return Set-AzStorageBlobContent -Container 'subscriptions' -Context $context -File '.\newVSSubscriptions.csv' -Blob 'oldVSSubscriptions.csv' -Force
     }
-    
+    catch {
+        Write-Host "An error occurred on writeNewVSSubsToStorageAccount:"
+        Write-Host $_
+    }
+}
+
+function main() {
+    $vsSubscriptions = getCurrentVSSubs
+    if ($vsSubscriptions -eq 0) {
+        return
+    }
+    else {
+        $context = getContext
+        getOldVSSubs $context
+        $newVSSubs = compareVSSubs
+        if ($newVSSubs -eq $true) {
+            $clientSecretCredential = getClientSecretCredential
+            sendEmail $vsSubscriptions $clientSecretCredential $context
+        }
+        cleanUp
+    }
 }
 
 function cleanUp() {
@@ -187,4 +155,3 @@ function cleanUp() {
 }
 
 main
-cleanUp

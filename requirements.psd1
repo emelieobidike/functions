@@ -6,4 +6,7 @@
     'Az' = '10.*'
     'Az.ResourceGraph' = '0.13.0'
     'Microsoft.Graph.Users.Actions' = '2.*'
+    # 'Az.Storage' = '5.*'
+    # 'Az.Resources' = '6.*'
+    'AzTable' = '2.*'
 }

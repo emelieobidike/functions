@@ -1,39 +1,43 @@
 param($Timer)
 
 function main() {
-    $vsSubscriptions = getCurrentVSSubs
-    if ($vsSubscriptions -eq 0) {
+    $unmovedVSSubscriptions = getUnmovedVSSubs
+    if ($unmovedVSSubscriptions -eq 0) {
         return
     }
     else {
         $context = getContext
-        getOldVSSubs $context
-        $newVSSubs = compareVSSubs
-        if ($newVSSubs -eq $true) {
-            $clientSecretCredential = getClientSecretCredential
-            sendEmail $vsSubscriptions $clientSecretCredential $context
+        $cloudTable = getCloudTable $context
+        $newVSSubs = checkVSSubs $unmovedVSSubscriptions $cloudTable
+        Write-Host "New Subs" $newVSSubs
+        if ($newVSSubs -eq $false) {
+            return
         }
-        cleanUp
+        else {
+            $clientSecretCredential = getClientSecretCredential
+            sendEmail $clientSecretCredential $newVSSubs $cloudTable
+        }
     }
 }
 
-function getCurrentVSSubs() {
+function getUnmovedVSSubs() {
     try {
         $query = 'resourcecontainers | where type == "microsoft.resources/subscriptions" | project name, subscriptionId, properties.managementGroupAncestorsChain[0].name , properties.subscriptionPolicies.quotaId'
         $subscriptions = Search-AzGraph -Query $query
         $prefix = "MSDN_"
-        $vsSubscriptions = @()
+        $unmovedVSSubscriptions = @()
         foreach ($subscription in $subscriptions) {
             if ($subscription.properties_subscriptionPolicies_quotaId.StartsWith($prefix) -and $subscription.properties_managementGroupAncestorsChain_0_name -ne "vs-mg") {
-                $vsSubscriptionObject = addVSSubProperties $subscription
-                $vsSubscriptions += $vsSubscriptionObject
+                $unmovedVSSubscriptionObject = addProperties $subscription
+                $unmovedVSSubscriptions += $unmovedVSSubscriptionObject
             }
         }
-        if ($vsSubscriptions.Length -ne 0) {
-            $path = '.\currentVSSubscriptions.csv'
-            $vsSubscriptions | Export-Csv -Path $path -NoTypeInformation >$null 2>&1 -Force
+        if ($unmovedVSSubscriptions.Length -gt 0) {
+            return $unmovedVSSubscriptions
         }
-        return $vsSubscriptions.Length
+        else {
+            return 0
+        }
     }
     catch {
         Write-Host "An error occurred on getCurrentVSSUbs:"
@@ -42,10 +46,12 @@ function getCurrentVSSubs() {
     
 }
 
-function addVSSubProperties($subscription) {
+function addProperties($subscription) {
     $PropertyHash = [ordered]@{
-        SubscriptionID   = $subscription.subscriptionId
-        SubscriptionName = $subscription.name
+        subscriptionId   = $subscription.subscriptionId
+        subscriptionName = if ($null -eq $subscription.subscriptionName) { $subscription.name } else {
+            $subscription.subscriptionName
+        }
     }
     return New-Object -TypeName PSObject -Property $PropertyHash
 }
@@ -55,37 +61,41 @@ function getContext() {
     return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken $token
 }
 
-function getOldVSSubs($context) {
+function getCloudTable($ctx) {
     try {
-        $DLBlob1HT = @{
-            Blob        = 'oldVSSubscriptions.csv'
-            Container   = 'subscriptions'
-            Destination = '.\'
-            Context     = $context
-        }
-        return Get-AzStorageBlobContent @DLBlob1HT -Force
+        $tableName = 'vssubscriptions'
+        $storageTable = Get-AzStorageTable -Name $tableName -Context $ctx
+        $cloudTable = $storageTable.CloudTable
+        return $cloudTable
     }
     catch {
-        Write-Host "An error occurred on getOldVSSubs:"
+        Write-Host "An error occurred on getCloudTable:"
         Write-Host $_
     }
 }
 
-function compareVSSubs() {
+function checkVSSubs($unmovedVSSubscriptions, $cloudTable) {
     try {
-        $oldVSSubs = Import-Csv .\oldVSSubscriptions.csv
-        $currentVSSubs = Import-Csv .\currentVSSubscriptions.csv
-        $newVSSubs = Compare-Object -ReferenceObject @($currentVSSubs | Select-Object) -DifferenceObject @($oldVSSubs | Select-Object) -Property SubscriptionName, SubscriptionID | Where-Object SideIndicator -eq '<='
-        if ($null -eq $newVSSubs) {
+        $newVSSubs = @()
+        foreach ($subscription in $unmovedVSSubscriptions) {
+            $newVSSub = Get-AzTableRow -table $cloudTable `
+                -columnName "subscriptionid" `
+                -value $subscription.subscriptionId `
+                -operator Equal
+            if ($null -eq $newVSSub) {
+                $newVSSubObject = addProperties $subscription
+                $newVSSubs += $newVSSubObject
+            }
+        }
+        if ($newVSSubs.Length -eq 0) {
             return $false
         }
         else {
-            $newVSSubs | Select-Object SubscriptionName, SubscriptionID | Export-Csv .\newVSSubscriptions.csv -NoTypeInformation
-            return $true
+            return $newVSSubs
         }
     }
     catch {
-        Write-Host "An error occurred on compareVSSubs:"
+        Write-Host "An error occurred on checkVSSubs:"
         Write-Host $_
     }
 }
@@ -97,11 +107,9 @@ function getClientSecretCredential() {
     return New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $appID, $clientSecretPass
 }
 
-function sendEmail($newVSSubs, $clientSecret, $context) {
+function sendEmail($clientSecret, $newVSSubs, $cloudTable) {
     try {
-        $attachment = ".\newVSSubscriptions.csv"
-        $messageAttachement = [Convert]::ToBase64String([IO.File]::ReadAllBytes($attachment))
-        $subject = $newVSSubs -eq 1 ? "A New Visual Studio Subscription has been Created" : "New Visual Studio Subscriptions have been Created"
+        $subject = $newVSSubs.Length -eq 1 ? "A New Visual Studio Subscription has been Created" : "New Visual Studio Subscriptions have been Created"
         $params = @{
             Message = @{
                 Subject      = $subject
@@ -116,20 +124,13 @@ function sendEmail($newVSSubs, $clientSecret, $context) {
                         }
                     }
                 )
-                Attachments  = @(
-                    @{
-                        "@odata.type" = "#microsoft.graph.fileAttachment"
-                        Name          = $attachment
-                        ContentType   = "text/plain"
-                        ContentBytes  = $messageAttachement
-                    }
-                )
             }
         }
         $tenantID = "c6b24d18-bbd0-4aec-b84c-e791e95a76e3"
         Connect-MgGraph -TenantId $tenantID -ClientSecretCredential $clientSecret
         Send-MgUserMail -UserId 'challspaceonline_live.com#EXT#@chiemelieobidikegmail.onmicrosoft.com' -BodyParameter $params -ErrorAction Stop
-        writeNewVSSubsToStorageAccount $context
+        deleteEntities $cloudTable
+        addTableEntities $newVSSubs $cloudTable
     }
     catch {
         Write-Host "An error occurred on sendEmail:"
@@ -137,23 +138,30 @@ function sendEmail($newVSSubs, $clientSecret, $context) {
     }
 }
 
-function writeNewVSSubsToStorageAccount($context) {
+function deleteEntities($cloudTable) {
     try {
-        return Set-AzStorageBlobContent -Container 'subscriptions' -Context $context -File '.\newVSSubscriptions.csv' -Blob 'oldVSSubscriptions.csv' -Force
+        Get-AzTableRow `
+            -table $cloudTable | Remove-AzTableRow -table $cloudTable 
     }
     catch {
-        Write-Host "An error occurred on writeNewVSSubsToStorageAccount:"
+        Write-Host "An error occurred on deleteEntities:"
         Write-Host $_
     }
 }
 
-function cleanUp() {
-    $path = '.\newVSSubscriptions.csv'
-    if (Test-Path -Path $path) {
-        Remove-Item .\newVSSubscriptions.csv
+function addTableEntities($newVSSubs, $cloudTable) {
+    try {
+        for ($index = 0; $index -lt $newVSSubs.Length; $index++) {
+            Add-AzTableRow `
+                -table $cloudTable `
+                -partitionKey "partition$index" `
+                -rowKey ("row$index") -property @{"subsriptionname" = $newVSSubs[$index].subscriptionName; "subscriptionid" = $newVSSubs[$index].subscriptionId }
+        }
     }
-    Remove-Item .\currentVSSubscriptions.csv
-    Remove-Item .\oldVSSubscriptions.csv
+    catch {
+        Write-Host "An error occurred on addTableEntities:"
+        Write-Host $_
+    }
 }
 
 main

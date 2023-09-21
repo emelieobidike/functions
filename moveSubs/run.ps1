@@ -9,7 +9,6 @@ function main() {
         $context = getContext
         $cloudTable = getCloudTable $context
         $newVSSubs = checkVSSubs $unmovedVSSubscriptions $cloudTable
-        Write-Host "New Subs" $newVSSubs
         if ($newVSSubs -eq $false) {
             return
         }

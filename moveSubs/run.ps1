@@ -1,25 +1,25 @@
 param($Timer)
 
-function main() {
-    $unmovedVSSubscriptions = getUnmovedVSSubs
-    if ($unmovedVSSubscriptions -eq 0) {
+function Main() {
+    $unmovedVSSubscriptions = Get-UnmovedVSSubs
+    if ($unmovedVSSubscriptions -eq $false) {
         return
     }
     else {
-        $context = getContext
-        $cloudTable = getCloudTable $context
-        $newVSSubs = checkVSSubs $unmovedVSSubscriptions $cloudTable
+        $context = Get-Context
+        $cloudTable = Get-CloudTable $context
+        $newVSSubs = Compare-VSSubs $unmovedVSSubscriptions $cloudTable
         if ($newVSSubs -eq $false) {
             return
         }
         else {
-            $clientSecretCredential = getClientSecretCredential
-            sendEmail $clientSecretCredential $newVSSubs $cloudTable
+            $clientSecretCredential = Get-ClientSecretCredential
+            Send-Email $clientSecretCredential $newVSSubs $cloudTable
         }
     }
 }
 
-function getUnmovedVSSubs() {
+function Get-UnmovedVSSubs() {
     try {
         $query = 'resourcecontainers | where type == "microsoft.resources/subscriptions" | project name, subscriptionId, properties.managementGroupAncestorsChain[0].name , properties.subscriptionPolicies.quotaId'
         $subscriptions = Search-AzGraph -Query $query
@@ -35,7 +35,7 @@ function getUnmovedVSSubs() {
             return $unmovedVSSubscriptions
         }
         else {
-            return 0
+            return $false
         }
     }
     catch {
@@ -45,7 +45,7 @@ function getUnmovedVSSubs() {
     
 }
 
-function addProperties($subscription) {
+function Add-Properties($subscription) {
     $PropertyHash = [ordered]@{
         subscriptionId   = $subscription.subscriptionId
         subscriptionName = if ($null -eq $subscription.subscriptionName) { $subscription.name } else {
@@ -55,12 +55,12 @@ function addProperties($subscription) {
     return New-Object -TypeName PSObject -Property $PropertyHash
 }
 
-function getContext() {
+function Get-Context() {
     $token = Get-AzKeyVaultSecret -VaultName "secrets773" -Name "SASToken" -AsPlainText
     return New-AzStorageContext -StorageAccountName "testb5f0" -SasToken $token
 }
 
-function getCloudTable($ctx) {
+function Get-CloudTable($ctx) {
     try {
         $tableName = 'vssubscriptions'
         $storageTable = Get-AzStorageTable -Name $tableName -Context $ctx
@@ -73,7 +73,7 @@ function getCloudTable($ctx) {
     }
 }
 
-function checkVSSubs($unmovedVSSubscriptions, $cloudTable) {
+function Compare-VSSubs($unmovedVSSubscriptions, $cloudTable) {
     try {
         $newVSSubs = @()
         foreach ($subscription in $unmovedVSSubscriptions) {
@@ -99,14 +99,14 @@ function checkVSSubs($unmovedVSSubscriptions, $cloudTable) {
     }
 }
 
-function getClientSecretCredential() {
+function Get-ClientSecretCredential() {
     $client_secret = Get-AzKeyVaultSecret -VaultName "secrets773" -Name "moveVSSubsSecret" -AsPlainText
     $appID = "fa86c8a0-231d-423f-84ee-02b119aa066d"
     $clientSecretPass = ConvertTo-SecureString -String $client_secret -AsPlainText -Force
     return New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $appID, $clientSecretPass
 }
 
-function sendEmail($clientSecret, $newVSSubs, $cloudTable) {
+function Send-Email($clientSecret, $newVSSubs, $cloudTable) {
     try {
         $subject = $newVSSubs.Length -eq 1 ? "A New Visual Studio Subscription has been Created" : "New Visual Studio Subscriptions have been Created"
         $params = @{
@@ -128,8 +128,8 @@ function sendEmail($clientSecret, $newVSSubs, $cloudTable) {
         $tenantID = "c6b24d18-bbd0-4aec-b84c-e791e95a76e3"
         Connect-MgGraph -TenantId $tenantID -ClientSecretCredential $clientSecret
         Send-MgUserMail -UserId 'challspaceonline_live.com#EXT#@chiemelieobidikegmail.onmicrosoft.com' -BodyParameter $params -ErrorAction Stop
-        deleteEntities $cloudTable
-        addTableEntities $newVSSubs $cloudTable
+        Remove-TableEntities $cloudTable
+        Add-TableEntities $newVSSubs $cloudTable
     }
     catch {
         Write-Host "An error occurred on sendEmail:"
@@ -137,7 +137,7 @@ function sendEmail($clientSecret, $newVSSubs, $cloudTable) {
     }
 }
 
-function deleteEntities($cloudTable) {
+function Remove-TableEntities($cloudTable) {
     try {
         Get-AzTableRow `
             -table $cloudTable | Remove-AzTableRow -table $cloudTable 
@@ -148,7 +148,7 @@ function deleteEntities($cloudTable) {
     }
 }
 
-function addTableEntities($newVSSubs, $cloudTable) {
+function Add-TableEntities($newVSSubs, $cloudTable) {
     try {
         for ($index = 0; $index -lt $newVSSubs.Length; $index++) {
             Add-AzTableRow `
@@ -163,4 +163,4 @@ function addTableEntities($newVSSubs, $cloudTable) {
     }
 }
 
-main
+Main

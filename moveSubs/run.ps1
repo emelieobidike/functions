@@ -1,6 +1,7 @@
 param($Timer)
 
 function Main() {
+    Write-Host "We move!!"
     $unmovedVSSubscriptions = Get-UnmovedVSSubs
     if ($unmovedVSSubscriptions -eq $false) {
         return

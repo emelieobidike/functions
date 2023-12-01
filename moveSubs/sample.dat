@@ -1,0 +1,32 @@
+Here is a possible email that you can send to the storage account owners:
+
+Subject: Disabling public blob access on your storage account
+
+Hello,
+
+We are writing to inform you that we are disabling public blob access on your storage account as part of our security best practices. This change will take effect on [date] and will affect all the containers and blobs in your storage account.
+
+Public blob access is a feature that allows anyone with the URL of a blob to access it without any authentication or authorization. While this may be convenient for some scenarios, it also poses a significant risk of exposing your data to unauthorized or malicious users. Therefore, we recommend that you use other methods to control the access to your blobs, such as shared access signatures, Azure Active Directory, or role-based access control.
+
+The implications of disabling public blob access are as follows:
+
+•  Any existing URLs that point to your blobs with public access will no longer work and will return a 404 error.
+
+•  Any applications or services that rely on public blob access to access your blobs will need to be updated to use other methods of authentication and authorization.
+
+•  Any containers or blobs that have the public access level set to "Blob" or "Container" will be changed to "Private" and will require proper permissions to access.
+
+To prepare for this change, you need to do the following:
+
+•  Review your storage account and identify any containers or blobs that have public access enabled.
+
+•  Update your applications or services that use public blob access to use other methods of authentication and authorization, such as shared access signatures, Azure Active Directory, or role-based access control.
+
+•  Test your applications or services to ensure that they work as expected after the change.
+
+If you have any questions or concerns, please contact us at [email address] or [phone number]. We appreciate your cooperation and understanding.
+
+Thank you for choosing Azure Storage.
+
+Sincerely,
+[Your name]

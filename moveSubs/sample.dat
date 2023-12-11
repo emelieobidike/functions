@@ -1,23 +1,45 @@
-I can write a PowerShell script to migrate a classic Application Insights resource to a workspace-based resource. Here is one possible solution:
+I can prepare a document for you that instructs your clients on how to disable public blob access in their storage accounts using Terraform and ARM template. Here is one possible example:
 
-# Get the name and resource group of the Application Insights resource
-$appInsightsName = "yourAppInsightsName"
-$appInsightsResourceGroup = "yourAppInsightsResourceGroup"
+How to disable public blob access in your storage accounts
+Public blob access is a feature that allows anyone with the URL of a blob to access it without any authentication or authorization. While this may be convenient for some scenarios, it also poses a significant risk of exposing your data to unauthorized or malicious users. Therefore, we recommend that you disable public blob access in your storage accounts and use other methods to control the access to your blobs, such as shared access signatures, Azure Active Directory, or role-based access control.
 
-# Get the Application Insights resource object
-$appInsights = Get-AzApplicationInsights -Name $appInsightsName -ResourceGroupName $appInsightsResourceGroup
+In this document, we will show you how to disable public blob access in your storage accounts using two different methods: Terraform and ARM template. Both methods are simple and automated, and do not require any action from your side. The impact to your application is minimal, and you can continue to use your existing instrumentation key and SDKs.
 
-# Get the name and resource group of the Log Analytics workspace
-$workspaceName = "yourWorkspaceName"
-$workspaceResourceGroup = "yourWorkspaceResourceGroup"
+Method 1: Terraform
+Terraform is an open-source tool that allows you to define and manage your infrastructure as code. You can use Terraform to create, update, or delete your Azure resources in a declarative and consistent way.
 
-# Get the Log Analytics workspace object
-$workspace = Get-AzOperationalInsightsWorkspace -Name $workspaceName -ResourceGroupName $workspaceResourceGroup
+To disable public blob access in your storage accounts using Terraform, you need to follow these steps:
 
-# Get the workspace ID
-$workspaceId = $workspace.ResourceId
+•  Install and configure Terraform on your machine or use the Azure Cloud Shell https://learn.microsoft.com/en-us/azure/templates/microsoft.storage/storageaccounts.
 
-# Update the Application Insights resource to use the workspace ID
-Update-AzApplicationInsights -Name $appInsightsName -ResourceGroupName $appInsightsResourceGroup -WorkspaceResourceId $workspaceId
+•  Create a Terraform configuration file (such as main.tf) that defines the Azure provider and the storage account resource. You can use the example code from the Terraform Registry https://stackoverflow.com/questions/73741756/disabling-allow-public-blob-access-using-terraform as a reference.
 
-This script will update the specified Application Insights resource to use the specified Log Analytics workspace for storing and analyzing the telemetry data. You can modify the script to suit your needs by changing the variables or adding error handling. You can also use the web search results to learn more about the cmdlets and parameters used in the script https://learn.microsoft.com/en-us/azure/azure-monitor/app/convert-classic-resource https://zimmergren.net/upgrade-application-insights-to-workspace-based-from-legacy/ https://nmw.zendesk.com/hc/en-us/articles/16831648804375-Migrate-to-Workspace-based-Application-Insights-from-Classic. I hope this helps you with your task. blush
+•  Add the argument allow_nested_items_to_be_public = false to the storage account resource. This will disable public blob access for all the containers and blobs in the storage account.
+
+•  Initialize Terraform by running terraform init in the same directory as your configuration file. This will download the required plugins and modules for your deployment.
+
+•  Plan your deployment by running terraform plan. This will show you what resources will be created, modified, or deleted by your configuration.
+
+•  Apply your deployment by running terraform apply. This will prompt you for confirmation and then execute the actions to disable public blob access. You can also use the -auto-approve flag to skip the confirmation step.
+
+•  Verify your deployment by checking the Azure portal or running terraform show. This will display the details and properties of your storage account.
+
+Method 2: ARM template
+ARM template is a JSON file that defines the resources and configurations for your Azure deployment. You can use ARM template to create, update, or delete your Azure resources in a declarative and consistent way.
+
+To disable public blob access in your storage accounts using ARM template, you need to follow these steps:
+
+•  Create an ARM template file (such as template.json) that defines the storage account resource. You can use the example code from the Microsoft Learn https://learn.microsoft.com/en-us/azure/templates/microsoft.storage/2021-02-01/storageaccounts as a reference.
+
+•  Add the property "allowBlobPublicAccess": false to the properties of the storage account resource. This will disable public blob access for all the containers and blobs in the storage account.
+
+•  Deploy the ARM template using the Azure portal, PowerShell, CLI, or REST API. You can use the instructions from the Microsoft Docs as a reference.
+
+•  Verify your deployment by checking the Azure portal or using the Get-AzStorageAccount cmdlet. This will display the details and properties of your storage account.
+
+We hope this document helps you to disable public blob access in your storage accounts using Terraform and ARM template. If you have any questions or concerns, please feel free to contact us at [email address] or [phone number]. We appreciate your cooperation and understanding.
+
+Thank you for choosing us as your Azure provider.
+
+Sincerely,
+[Your name]

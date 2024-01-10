@@ -1,45 +1,39 @@
-I can prepare a document for you that instructs your clients on how to disable public blob access in their storage accounts using Terraform and ARM template. Here is one possible example:
+Okay, I can try to generate a document comparing Azure Disk Encryption with Azure Encryption at Host for you.
 
-How to disable public blob access in your storage accounts
-Public blob access is a feature that allows anyone with the URL of a blob to access it without any authentication or authorization. While this may be convenient for some scenarios, it also poses a significant risk of exposing your data to unauthorized or malicious users. Therefore, we recommend that you disable public blob access in your storage accounts and use other methods to control the access to your blobs, such as shared access signatures, Azure Active Directory, or role-based access control.
+Please wait a moment while I create it.
 
-In this document, we will show you how to disable public blob access in your storage accounts using two different methods: Terraform and ARM template. Both methods are simple and automated, and do not require any action from your side. The impact to your application is minimal, and you can continue to use your existing instrumentation key and SDKs.
+Here is the document that I generated. I hope you find it useful. blush
 
-Method 1: Terraform
-Terraform is an open-source tool that allows you to define and manage your infrastructure as code. You can use Terraform to create, update, or delete your Azure resources in a declarative and consistent way.
+# Azure Disk Encryption vs Azure Encryption at Host
 
-To disable public blob access in your storage accounts using Terraform, you need to follow these steps:
+Azure Disk Encryption and Azure Encryption at Host are two options for encrypting your data stored on Azure managed disks. In this document, we will compare and contrast these two options based on what they are, how they differ technically, and how they compare price wise.
 
-•  Install and configure Terraform on your machine or use the Azure Cloud Shell https://learn.microsoft.com/en-us/azure/templates/microsoft.storage/storageaccounts.
+## What they are
 
-•  Create a Terraform configuration file (such as main.tf) that defines the Azure provider and the storage account resource. You can use the example code from the Terraform Registry https://stackoverflow.com/questions/73741756/disabling-allow-public-blob-access-using-terraform as a reference.
+•  Azure Disk Encryption (ADE) is a solution that encrypts the OS and data disks of Azure virtual machines (VMs) inside your VMs by using the BitLocker feature of Windows or the DM-Crypt feature of Linux. ADE is integrated with Azure Key Vault to help you control and manage the disk encryption keys and secrets, with the option to encrypt with a key encryption key (KEK).
 
-•  Add the argument allow_nested_items_to_be_public = false to the storage account resource. This will disable public blob access for all the containers and blobs in the storage account.
+•  Azure Encryption at Host (EAH) is a VM option that encrypts the data stored on the VM host at rest and flows encrypted to the Storage service. EAH ensures that all temp disks and disk caches are encrypted at rest and in transit, enhancing the security of Azure Disk Storage Server-Side Encryption.
 
-•  Initialize Terraform by running terraform init in the same directory as your configuration file. This will download the required plugins and modules for your deployment.
 
-•  Plan your deployment by running terraform plan. This will show you what resources will be created, modified, or deleted by your configuration.
+## How they differ technically
 
-•  Apply your deployment by running terraform apply. This will prompt you for confirmation and then execute the actions to disable public blob access. You can also use the -auto-approve flag to skip the confirmation step.
+•  ADE encrypts the data on the disks attached to your VMs, while EAH encrypts the data on the host where your VMs run. ADE requires you to install an extension on your VMs, while EAH does not require any installation or configuration on your VMs.
 
-•  Verify your deployment by checking the Azure portal or running terraform show. This will display the details and properties of your storage account.
+•  ADE encrypts the data before it leaves the VM and decrypts it after it arrives at the VM, while EAH encrypts the data after it leaves the VM and decrypts it before it arrives at the VM. ADE protects your data from unauthorized access by the storage service or by anyone who has access to the physical disks, while EAH protects your data from unauthorized access by the host or by anyone who has access to the host memory or caches.
 
-Method 2: ARM template
-ARM template is a JSON file that defines the resources and configurations for your Azure deployment. You can use ARM template to create, update, or delete your Azure resources in a declarative and consistent way.
+•  ADE supports customer-managed keys and platform-managed keys, while EAH only supports platform-managed keys. ADE allows you to use Azure Key Vault or Azure Key Vault Managed HSM to store and manage your encryption keys, while EAH does not require any key management service. ADE also allows you to use a key encryption key (KEK) to encrypt your disk encryption key (DEK), while EAH does not support KEK.
 
-To disable public blob access in your storage accounts using ARM template, you need to follow these steps:
+•  ADE and EAH have different restrictions and regional availability. ADE is not available on Basic, A-series VMs, or on VMs with less than 2 GB of memory. EAH is not available on legacy VM sizes. ADE is available in all regions, while EAH is not available in some regions for Ultra Disks and Premium SSD v2 managed disks. ADE and EAH are mutually exclusive and cannot be enabled on the same VM or disk.
 
-•  Create an ARM template file (such as template.json) that defines the storage account resource. You can use the example code from the Microsoft Learn https://learn.microsoft.com/en-us/azure/templates/microsoft.storage/2021-02-01/storageaccounts as a reference.
 
-•  Add the property "allowBlobPublicAccess": false to the properties of the storage account resource. This will disable public blob access for all the containers and blobs in the storage account.
+## How they compare price wise
 
-•  Deploy the ARM template using the Azure portal, PowerShell, CLI, or REST API. You can use the instructions from the Microsoft Docs as a reference.
+•  ADE and EAH have different pricing models and implications. ADE is free of charge, but it may incur additional costs for Azure Key Vault operations and storage, depending on your key management option and usage. EAH is also free of charge, but it may affect the performance and availability of your VMs, depending on your VM size and workload. EAH may also limit your VM size options and regional choices, depending on your disk type and encryption requirements.
 
-•  Verify your deployment by checking the Azure portal or using the Get-AzStorageAccount cmdlet. This will display the details and properties of your storage account.
+•  ADE and EAH have different trade-offs and benefits. ADE gives you more control and flexibility over your encryption keys and secrets, but it also adds more complexity and overhead to your VM management and operations. EAH provides you with a simple and seamless encryption experience, but it also reduces your encryption options and capabilities. ADE and EAH both enhance the security and compliance of your data, but they also have different scopes and levels of protection.
 
-We hope this document helps you to disable public blob access in your storage accounts using Terraform and ARM template. If you have any questions or concerns, please feel free to contact us at [email address] or [phone number]. We appreciate your cooperation and understanding.
 
-Thank you for choosing us as your Azure provider.
+## Conclusion
 
-Sincerely,
-[Your name]
+Azure Disk Encryption and Azure Encryption at Host are two encryption options for your Azure managed disks. They have different technical and pricing aspects, as well as different trade-offs and benefits. You should choose the option that best suits your security and compliance needs, as well as your VM and disk characteristics and preferences.
+

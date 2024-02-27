@@ -1,0 +1,52 @@
+Okay, I can try to write a powershell script to delete rows from an Azure storage table that are older than 365 days while showing percentage completion for you.
+
+Please wait a moment while I create it.
+
+Here is the script that I generated. I hope you find it useful. blush
+
+# Parameters
+$StorageAccountName = "YourStorageAccountName"
+$StorageAccountKey = "YourStorageAccountKey"
+$TableName = "YourTableName"
+$Days = 365 # Change this to your desired number of days
+
+# Create storage context
+$ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+
+# Get storage table
+$storageTable = Get-AzStorageTable –Name $TableName –Context $ctx
+
+# Get current date minus the number of days
+$Date = (Get-Date).AddDays(-$Days)
+
+# Generate filter condition based on Timestamp property
+$Filter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterConditionForDate("Timestamp", "lt", $Date)
+
+# Query the table for entities older than the specified number of days
+$Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter
+
+# Get the total number of entities to delete
+$Total = $Entities.Count
+
+# Initialize a counter for deleted entities
+$Deleted = 0
+
+# Loop through the entities and delete them one by one
+foreach ($Entity in $Entities) {
+
+# Delete the entity from the table
+Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
+
+# Increment the counter
+$Deleted++
+
+# Calculate the percentage of completion
+$Percent = ($Deleted / $Total) * 100
+
+# Write the progress to the console
+Write-Progress -Activity "Deleting entities from $TableName" -Status "$Deleted of $Total entities deleted ($Percent %)" -PercentComplete $Percent
+}
+
+# Write the final result to the console
+Write-Host "All $Total entities older than $Days days have been deleted from $TableName"
+

@@ -1,52 +1,39 @@
-Okay, I can try to write a powershell script to delete rows from an Azure storage table that are older than 365 days while showing percentage completion for you.
+Certainly! Below is an example of C# code that loops through an array of Azure Storage accounts and deletes table rows that are older than 365 days. Please ensure you have the necessary Azure Storage libraries installed and proper permissions set up before running this code.
 
-Please wait a moment while I create it.
+using Microsoft.Azure.Cosmos.Table;
+using System;
+using System.Threading.Tasks;
 
-Here is the script that I generated. I hope you find it useful. blush
+public class StorageAccountCleaner
+{
+public static async Task RemoveOldTableRowsAsync(CloudTable[] storageAccounts)
+{
+foreach (var storageAccount in storageAccounts)
+{
+TableQuery<DynamicTableEntity> query = new TableQuery<DynamicTableEntity>().Where(
+TableQuery.GenerateFilterConditionForDate("Timestamp", QueryComparisons.LessThan, DateTimeOffset.UtcNow.AddDays(-365))
+);
 
-# Parameters
-$StorageAccountName = "YourStorageAccountName"
-$StorageAccountKey = "YourStorageAccountKey"
-$TableName = "YourTableName"
-$Days = 365 # Change this to your desired number of days
+TableContinuationToken token = null;
+do
+{
+var resultSegment = await storageAccount.ExecuteQuerySegmentedAsync(query, token);
+token = resultSegment.ContinuationToken;
 
-# Create storage context
-$ctx = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
-
-# Get storage table
-$storageTable = Get-AzStorageTable –Name $TableName –Context $ctx
-
-# Get current date minus the number of days
-$Date = (Get-Date).AddDays(-$Days)
-
-# Generate filter condition based on Timestamp property
-$Filter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterConditionForDate("Timestamp", "lt", $Date)
-
-# Query the table for entities older than the specified number of days
-$Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter
-
-# Get the total number of entities to delete
-$Total = $Entities.Count
-
-# Initialize a counter for deleted entities
-$Deleted = 0
-
-# Loop through the entities and delete them one by one
-foreach ($Entity in $Entities) {
-
-# Delete the entity from the table
-Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
-
-# Increment the counter
-$Deleted++
-
-# Calculate the percentage of completion
-$Percent = ($Deleted / $Total) * 100
-
-# Write the progress to the console
-Write-Progress -Activity "Deleting entities from $TableName" -Status "$Deleted of $Total entities deleted ($Percent %)" -PercentComplete $Percent
+// Loop through the results, displaying information about the entity
+foreach (DynamicTableEntity entity in resultSegment.Results)
+{
+// Delete the entity
+TableOperation deleteOperation = TableOperation.Delete(entity);
+await storageAccount.ExecuteAsync(deleteOperation);
+}
+} while (token != null);
+}
+}
 }
 
-# Write the final result to the console
-Write-Host "All $Total entities older than $Days days have been deleted from $TableName"
+// Usage example:
+// Assuming 'cloudTables' is an array of CloudTable objects representing your Azure Storage Tables
+await StorageAccountCleaner.RemoveOldTableRowsAsync(cloudTables);
 
+This code uses the Azure Cosmos Table SDK to query and delete rows. It's important to handle exceptions and errors in production code, which this example does not include for brevity. Also, consider implementing logging and proper resource management as needed.

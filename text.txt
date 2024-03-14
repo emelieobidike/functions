@@ -1,39 +1,46 @@
-Certainly! Below is an example of C# code that loops through an array of Azure Storage accounts and deletes table rows that are older than 365 days. Please ensure you have the necessary Azure Storage libraries installed and proper permissions set up before running this code.
+"Certainly! Here's a C# code snippet using Azure.Data.Tables that loops through a list of 6 Azure Storage accounts and removes table rows older than 365 days:
 
-using Microsoft.Azure.Cosmos.Table;
+using Azure;
+using Azure.Data.Tables;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
-public class StorageAccountCleaner
+class Program
 {
-public static async Task RemoveOldTableRowsAsync(CloudTable[] storageAccounts)
+static async Task Main(string[] args)
 {
-foreach (var storageAccount in storageAccounts)
+// List of connection strings for the 6 Azure Storage accounts
+var connectionStrings = new List<string>
 {
-TableQuery<DynamicTableEntity> query = new TableQuery<DynamicTableEntity>().Where(
-TableQuery.GenerateFilterConditionForDate("Timestamp", QueryComparisons.LessThan, DateTimeOffset.UtcNow.AddDays(-365))
-);
+"DefaultEndpointsProtocol=https;AccountName=account1;AccountKey=key1;EndpointSuffix=core.windows.net",
+// ... Add the other 5 connection strings here
+};
 
-TableContinuationToken token = null;
-do
+// Loop through each connection string
+foreach (var connectionString in connectionStrings)
 {
-var resultSegment = await storageAccount.ExecuteQuerySegmentedAsync(query, token);
-token = resultSegment.ContinuationToken;
+// Create a service client
+var serviceClient = new TableServiceClient(connectionString);
 
-// Loop through the results, displaying information about the entity
-foreach (DynamicTableEntity entity in resultSegment.Results)
+// Assume you have a single table named "MyTable"
+var tableClient = serviceClient.GetTableClient("MyTable");
+
+// Define a filter for rows older than 365 days
+string filter = TableClient.CreateQueryFilter($"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365):O}");
+
+// Query the table
+AsyncPageable<TableEntity> queryResults = tableClient.QueryAsync<TableEntity>(filter);
+
+// Loop through the results and delete each entity
+await foreach (var entity in queryResults)
 {
-// Delete the entity
-TableOperation deleteOperation = TableOperation.Delete(entity);
-await storageAccount.ExecuteAsync(deleteOperation);
+await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
 }
-} while (token != null);
 }
 }
 }
 
-// Usage example:
-// Assuming 'cloudTables' is an array of CloudTable objects representing your Azure Storage Tables
-await StorageAccountCleaner.RemoveOldTableRowsAsync(cloudTables);
+Make sure to replace the placeholder connection strings with the actual ones for your Azure Storage accounts. This code assumes that all accounts have a table named "MyTable" and that you want to remove rows from this table. Adjust the table name as necessary for your use case.
 
-This code uses the Azure Cosmos Table SDK to query and delete rows. It's important to handle exceptions and errors in production code, which this example does not include for brevity. Also, consider implementing logging and proper resource management as needed.
+Please note that this code does not include error handling and logging, which are important for production use. Also, consider implementing batch deletion for better performance when dealing with a large number of entities."

@@ -1,4 +1,4 @@
-"Certainly! Here's a C# code snippet using Azure.Data.Tables that loops through a list of 6 Azure Storage accounts and removes table rows older than 365 days:
+Certainly! Here's a C# code snippet that uses Azure.Data.Tables to loop through a list of 6 Azure Storage accounts, iterate over all tables in each account, and remove rows that are older than 365 days:
 
 using Azure;
 using Azure.Data.Tables;
@@ -13,23 +13,29 @@ static async Task Main(string[] args)
 // List of connection strings for the 6 Azure Storage accounts
 var connectionStrings = new List<string>
 {
-"DefaultEndpointsProtocol=https;AccountName=account1;AccountKey=key1;EndpointSuffix=core.windows.net",
-// ... Add the other 5 connection strings here
+"Account1_ConnectionString",
+"Account2_ConnectionString",
+"Account3_ConnectionString",
+"Account4_ConnectionString",
+"Account5_ConnectionString",
+"Account6_ConnectionString"
 };
 
 // Loop through each connection string
 foreach (var connectionString in connectionStrings)
 {
-// Create a service client
 var serviceClient = new TableServiceClient(connectionString);
 
-// Assume you have a single table named "MyTable"
-var tableClient = serviceClient.GetTableClient("MyTable");
+// Fetch the list of tables for each storage account
+AsyncPageable<string> tables = serviceClient.GetTableNamesAsync();
+await foreach (var tableName in tables)
+{
+var tableClient = serviceClient.GetTableClient(tableName);
 
 // Define a filter for rows older than 365 days
 string filter = TableClient.CreateQueryFilter($"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365):O}");
 
-// Query the table
+// Query the table for entities older than 365 days
 AsyncPageable<TableEntity> queryResults = tableClient.QueryAsync<TableEntity>(filter);
 
 // Loop through the results and delete each entity
@@ -40,7 +46,8 @@ await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
 }
 }
 }
+}
 
-Make sure to replace the placeholder connection strings with the actual ones for your Azure Storage accounts. This code assumes that all accounts have a table named "MyTable" and that you want to remove rows from this table. Adjust the table name as necessary for your use case.
+Replace "AccountX_ConnectionString" with the actual connection strings of your Azure Storage accounts. This code assumes that you have the necessary permissions to list and delete entities in the tables.
 
-Please note that this code does not include error handling and logging, which are important for production use. Also, consider implementing batch deletion for better performance when dealing with a large number of entities."
+Please note that this code does not include error handling and logging, which are important for production use. Also, consider implementing batch deletion for better performance when dealing with a large number of entities.

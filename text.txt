@@ -20,7 +20,7 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
             var client = new ArmClient(credentials);
 
             // Use filters with GetSubscriptions to retrieve desired subscription by ID
-            var subscriptions = client.GetSubscriptions().ToList(f => f.Where(s => s.Id.ToString() == subscriptionId));
+            var subscriptions = client.GetSubscriptions().ToList(filter: $"filter=subscriptionId eq '{subscriptionId}'");
 
             // Access the first subscription matching the ID (assuming there's only one)
             var subscription = subscriptions.FirstOrDefault();

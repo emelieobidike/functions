@@ -16,8 +16,8 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
     {
         try
         {
-            // Create a resource group client
-            var client = new ResourceGroupClient(credentials);
+            // Create a resource client with credentials
+            var client = new ResourceClient(credentials);
 
             // Get all subscriptions
             var subscriptions = await client.GetSubscriptions().GetAsync();

@@ -11,20 +11,23 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
 {
     writer.WriteLine("Subscription,ResourceGroup,Owner,EncryptionAtHost");
 
-    // Iterate through subscriptions
     foreach (var subscriptionId in new[] { "YourSubscriptionId1", "YourSubscriptionId2", "YourSubscriptionId3", "YourSubscriptionId4", "YourSubscriptionId5", "YourSubscriptionId6" })
     {
         try
         {
-            // Create a resource management client for the subscription
-            var client = new ArmClient(credentials).GetSubscription(subscriptionId);
+            // Create a resource management client
+            var client = new ResourceManagementClient(credentials);
 
-            var resourceGroups = client.GetResourceGroups().List();
+            // Get the subscription object
+            var subscription = await client.GetSubscriptions().GetAsync(subscriptionId);
+
+            var resourceGroups = subscription.GetResourceGroups().List();
 
             // Iterate through resource groups
             foreach (var resourceGroup in resourceGroups)
             {
-                var vms = client.GetVirtualMachines(resourceGroup.Id).List();
+                var computeClient = new ComputeManagementClient(client, subscription.Id);
+                var vms = computeClient.VirtualMachines.List(resourceGroup.Name);
 
                 // Iterate through VMs
                 foreach (var vm in vms)
@@ -35,7 +38,7 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
                     var encryptionEnabled = vm.EncryptionSettings?.DiskEncryptionSettings?.EncryptionAtRestEnabled ?? false; // Handle potential null value
 
                     // Write data to CSV
-                    writer.WriteLine($"{subscriptionId},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
+                    writer.WriteLine($"{subscription.Id},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
                 }
             }
         }

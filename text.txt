@@ -2,7 +2,6 @@ using Azure.Identity;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Resources;
 using System.IO;
-using Azure.ResourceManager.Core;
 
 // Authenticate to Azure
 var credentials = new DefaultAzureCredential();
@@ -17,7 +16,7 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
         try
         {
             // Create a resource client with credentials
-            var client = new ResourceClient(credentials);
+            var client = new SubscriptionClient(credentials);
 
             // Get all subscriptions
             var subscriptions = await client.GetSubscriptions().GetAsync();

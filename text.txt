@@ -2,6 +2,7 @@ using Azure.Identity;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Resources;
 using System.IO;
+using System.Linq;
 
 // Authenticate to Azure
 var credentials = new DefaultAzureCredential();
@@ -18,11 +19,11 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
             // Create a resource management client
             var client = new ArmClient(credentials);
 
-            // Use filters with GetSubscriptions to retrieve desired subscription by ID
-            var subscriptions = await client.GetSubscriptions().GetAsync(filter: $"filter=subscriptionId eq '{subscriptionId}'");
+            // Get all subscriptions
+            var subscriptions = await client.GetSubscriptions().GetAsync();
 
-            // Access the first subscription matching the ID (assuming there's only one)
-            var subscription = subscriptions.FirstOrDefault();
+            // Filter subscriptions by ID and access the first match (assuming unique ID)
+            var subscription = subscriptions.FirstOrDefault(s => s.Id.ToString() == subscriptionId);
 
             if (subscription != null)
             {

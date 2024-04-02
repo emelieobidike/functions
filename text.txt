@@ -15,14 +15,14 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
     {
         try
         {
-            // Create a resource client with credentials
-            var client = new SubscriptionClient(credentials);
+            // Create a resource management client
+            var client = new ArmClient(credentials);
 
-            // Get all subscriptions
-            var subscriptions = await client.GetSubscriptions().GetAsync();
+            // Use filters with GetSubscriptions to retrieve desired subscription by ID
+            var subscriptions = await client.GetSubscriptions().GetAsync(filter: $"filter=subscriptionId eq '{subscriptionId}'");
 
-            // Filter and access desired subscription by ID
-            var subscription = subscriptions.FirstOrDefault(s => s.Id.ToString() == subscriptionId);
+            // Access the first subscription matching the ID (assuming there's only one)
+            var subscription = subscriptions.FirstOrDefault();
 
             if (subscription != null)
             {

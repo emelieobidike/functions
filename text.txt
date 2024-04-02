@@ -1,6 +1,5 @@
 using Azure.Identity;
-using Microsoft.Azure.Management.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.ResourceManager;
 using Microsoft.Azure.Management.Compute.Fluent;
 using System.IO;
 
@@ -10,40 +9,40 @@ var credentials = new DefaultAzureCredential();
 // Create CSV file with headers
 using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
 {
-   writer.WriteLine("Subscription,ResourceGroup,Owner,EncryptionAtHost");
+    writer.WriteLine("Subscription,ResourceGroup,Owner,EncryptionAtHost");
 
-   // Iterate through subscriptions
-   foreach (var subscriptionId in new[] { "YourSubscriptionId1", "YourSubscriptionId2", "YourSubscriptionId3", "YourSubscriptionId4", "YourSubscriptionId5", "YourSubscriptionId6" })
-   {
-       try
-       {
-           // Create an Azure resource manager client for the subscription
-           using (var azure = Azure.Configure().Authenticate(credentials).WithSubscription(subscriptionId).AzureClient())
-           {
-               var resourceGroups = azure.ResourceGroups.List();
+    // Iterate through subscriptions
+    foreach (var subscriptionId in new[] { "YourSubscriptionId1", "YourSubscriptionId2", "YourSubscriptionId3", "YourSubscriptionId4", "YourSubscriptionId5", "YourSubscriptionId6" })
+    {
+        try
+        {
+            // Create an Azure resource manager client for the subscription
+            using (var client = new AzureManagementClient(credentials).SubscriptionEndpoint(subscriptionId))
+            {
+                var resourceGroups = client.ResourceGroups.List();
 
-               // Iterate through resource groups
-               foreach (var resourceGroup in resourceGroups)
-               {
-                   var vms = azure.VirtualMachines.ListByResourceGroup(resourceGroup.Name);
+                // Iterate through resource groups
+                foreach (var resourceGroup in resourceGroups)
+                {
+                    var vms = new VirtualMachinesOperations(client, resourceGroup.Id).List();
 
-                   // Iterate through VMs
-                   foreach (var vm in vms)
-                   {
-                       var ownerTag = vm.Tags.Where(t => t.Key.Equals("PrimaryContact", StringComparison.OrdinalIgnoreCase) || t.Key.Equals("primarycontact", StringComparison.OrdinalIgnoreCase)).Select(t => t.Value).FirstOrDefault();
+                    // Iterate through VMs
+                    foreach (var vm in vms)
+                    {
+                        var ownerTag = vm.Tags.Where(t => t.Key.Equals("PrimaryContact", StringComparison.OrdinalIgnoreCase) || t.Key.Equals("primarycontact", StringComparison.OrdinalIgnoreCase)).Select(t => t.Value).FirstOrDefault();
 
-                       // Check for encryption at host
-                       var encryptionEnabled = vm.EncryptionSettings().EncryptionAtHostEnabled();
+                        // Check for encryption at host
+                        var encryptionEnabled = vm.EncryptionSettings?.EncryptionAtHostEnabled ?? false; // Handle potential null value
 
-                       // Write data to CSV
-                       writer.WriteLine($"{subscriptionId},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
-                   }
-               }
-           }
-       }
-       catch (Azure.RequestFailedException ex) when (ex.Message.Contains("ResourceNotFound"))
-       {
-           // Handle the case where the subscription or resource group is not found
-       }
-   }
+                        // Write data to CSV
+                        writer.WriteLine($"{subscriptionId},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
+                    }
+                }
+            }
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Message.Contains("ResourceNotFound"))
+        {
+            // Handle the case where the subscription or resource group is not found
+        }
+    }
 }

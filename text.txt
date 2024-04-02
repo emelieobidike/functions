@@ -1,12 +1,11 @@
 using Azure.Identity;
-using Azure.Management.ResourceManager;
-using Azure.Management.Compute;
-using Azure.Cli.Core;
+using Microsoft.Azure.Management.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.Compute.Fluent;
 using System.IO;
 
 // Authenticate to Azure
 var credentials = new DefaultAzureCredential();
-var azure = Azure.Configure().Authenticate(credentials).WithSubscription("YourSubscriptionId1");  // Replace with actual subscription ID
 
 // Create CSV file with headers
 using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
@@ -16,35 +15,35 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
    // Iterate through subscriptions
    foreach (var subscriptionId in new[] { "YourSubscriptionId1", "YourSubscriptionId2", "YourSubscriptionId3", "YourSubscriptionId4", "YourSubscriptionId5", "YourSubscriptionId6" })
    {
-       azure = Azure.Configure().Authenticate(credentials).WithSubscription(subscriptionId);
-       var resourceGroups = azure.ResourceGroups.List();
-
-       // Iterate through resource groups
-       foreach (var resourceGroup in resourceGroups)
+       try
        {
-           var vms = azure.VirtualMachines.ListByResourceGroup(resourceGroup.Name);
-
-           // Iterate through VMs
-           foreach (var vm in vms)
+           // Create an Azure resource manager client for the subscription
+           using (var azure = Azure.Configure().Authenticate(credentials).WithSubscription(subscriptionId).AzureClient())
            {
-               var ownerTag = vm.Tags.Where(t => t.Key.Equals("PrimaryContact", StringComparison.OrdinalIgnoreCase) || t.Key.Equals("primarycontact", StringComparison.OrdinalIgnoreCase)).Select(t => t.Value).FirstOrDefault();
+               var resourceGroups = azure.ResourceGroups.List();
 
-               // Check for encryption at host
-               var encryptionEnabled = false;
-               AzureContext.Current.Subscription = azure.SubscriptionId;
-               try
+               // Iterate through resource groups
+               foreach (var resourceGroup in resourceGroups)
                {
-                   var encryptionStatuses = await Cli.Core.Extensions.OutputExtensions.GetOutputAsync(Cli.Core.Cli.ExecuteAsync("vm encryption show --resource-group " + resourceGroup.Name + " --name " + vm.Name));
-                   encryptionEnabled = encryptionStatuses.Any(status => status.Contains("Encryption is enabled on disk"));
-               }
-               catch (Azure.RequestFailedException ex) when (ex.Message.Contains("Encryption is not enabled for this VM"))
-               {
-                   // Handle the case where encryption is not enabled
-               }
+                   var vms = azure.VirtualMachines.ListByResourceGroup(resourceGroup.Name);
 
-               // Write data to CSV
-               writer.WriteLine($"{subscriptionId},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
+                   // Iterate through VMs
+                   foreach (var vm in vms)
+                   {
+                       var ownerTag = vm.Tags.Where(t => t.Key.Equals("PrimaryContact", StringComparison.OrdinalIgnoreCase) || t.Key.Equals("primarycontact", StringComparison.OrdinalIgnoreCase)).Select(t => t.Value).FirstOrDefault();
+
+                       // Check for encryption at host
+                       var encryptionEnabled = vm.EncryptionSettings().EncryptionAtHostEnabled();
+
+                       // Write data to CSV
+                       writer.WriteLine($"{subscriptionId},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
+                   }
+               }
            }
+       }
+       catch (Azure.RequestFailedException ex) when (ex.Message.Contains("ResourceNotFound"))
+       {
+           // Handle the case where the subscription or resource group is not found
        }
    }
 }

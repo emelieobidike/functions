@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 
 // Authenticate to Azure
-var credentials = new DefaultAzureCredential();
+var credentials = new DefaultAzureCredential(); // Use DefaultAzureCredential if applicable
 
 // Create CSV file with headers
 using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
@@ -19,11 +19,11 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
             // Create a resource management client
             var client = new ArmClient(credentials);
 
-            // Get all subscriptions
-            var subscriptions = await client.GetSubscriptions().GetAsync();
+            // Use filters with GetSubscriptions to retrieve desired subscription by ID
+            var subscriptions = client.GetSubscriptions().ToList(f => f.Where(s => s.Id.ToString() == subscriptionId));
 
-            // Filter subscriptions by ID and access the first match (assuming unique ID)
-            var subscription = subscriptions.FirstOrDefault(s => s.Id.ToString() == subscriptionId);
+            // Access the first subscription matching the ID (assuming there's only one)
+            var subscription = subscriptions.FirstOrDefault();
 
             if (subscription != null)
             {

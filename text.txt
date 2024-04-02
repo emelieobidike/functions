@@ -16,18 +16,18 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
     {
         try
         {
-            // Create a resource management client
-            var resourceManagementClient = new AzureManagementClient(credentials);
+            // Create a resource manager client
+            var resourceManagerClient = new SubscriptionClient(credentials).GetSubscription(subscriptionId);
 
-            // Get the subscription object
-            var subscription = resourceManagementClient.GetSubscription(subscriptionId);
-
-            var resourceGroups = subscription.GetResourceGroups().List();
+            var resourceGroups = resourceManagerClient.GetResourceGroups().List();
 
             // Iterate through resource groups
             foreach (var resourceGroup in resourceGroups)
             {
-                var vms = new VirtualMachinesOperations(resourceManagementClient, resourceGroup.Id).List();
+                // Create a compute management client for the current subscription
+                var computeClient = new ComputeManagementClient(credentials, resourceGroup.Id.SubscriptionId);
+
+                var vms = computeClient.VirtualMachines.List(resourceGroup.Name);
 
                 // Iterate through VMs
                 foreach (var vm in vms)

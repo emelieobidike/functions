@@ -1,6 +1,6 @@
 using Azure.Identity;
-using Microsoft.Azure.Management.Compute;
-using Microsoft.Azure.Management.ResourceManager;
+using Azure.ResourceManager.Compute;
+using Azure.ResourceManager.Resources;
 using System.IO;
 
 // Authenticate to Azure
@@ -16,18 +16,15 @@ using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
     {
         try
         {
-            // Create a resource manager client
-            var resourceManagerClient = new SubscriptionClient(credentials).GetSubscription(subscriptionId);
+            // Create a resource management client for the subscription
+            var client = new ArmClient(credentials).GetSubscription(subscriptionId);
 
-            var resourceGroups = resourceManagerClient.GetResourceGroups().List();
+            var resourceGroups = client.GetResourceGroups().List();
 
             // Iterate through resource groups
             foreach (var resourceGroup in resourceGroups)
             {
-                // Create a compute management client for the current subscription
-                var computeClient = new ComputeManagementClient(credentials, resourceGroup.Id.SubscriptionId);
-
-                var vms = computeClient.VirtualMachines.List(resourceGroup.Name);
+                var vms = client.GetVirtualMachines(resourceGroup.Id).List();
 
                 // Iterate through VMs
                 foreach (var vm in vms)

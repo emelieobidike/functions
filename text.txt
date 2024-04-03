@@ -1,79 +1,34 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Azure.Management.Compute;
-using Microsoft.Azure.Management.Compute.Models;
-using Microsoft.Azure.Management.ResourceManager;
-using Microsoft.Azure.Management.ResourceManager.Models;
-using Microsoft.Rest;
+$subscriptionIds = @("subscription-id1", "subscription-id2", ..., "subscription-id8")
+$vmInfoList = @()
 
-public static async Task<List<VmEncryptionInfo>> GetVMsWithoutHostEncryption(string[] subscriptionIds)
-{
-    var vmInfoList = new List<VmEncryptionInfo>();
-    var credentials = SdkContext.AzureCredentialsFactory.FromServicePrincipal(clientId, clientSecret, tenantId, AzureEnvironment.AzureGlobalCloud);
-    var resourceManagementClient = new ResourceManagementClient(credentials) { SubscriptionId = subscriptionIds[0] };
+foreach ($subscriptionId in $subscriptionIds) {
+    # Connect to Azure using your subscription
+    Connect-AzAccount -SubscriptionId $subscriptionId
 
-    foreach (var subscriptionId in subscriptionIds)
-    {
-        resourceManagementClient.SubscriptionId = subscriptionId;
-        var vms = await resourceManagementClient.VirtualMachines.ListAllAsync();
+    # Get all VMs in the subscription
+    $vms = Get-AzVM
 
-        foreach (var vm in vms)
-        {
-            var vmInfo = new VmEncryptionInfo
-            {
-                Name = vm.Name,
-                ResourceGroup = vm.ResourceGroupName,
-                SubscriptionId = subscriptionId
-            };
+    foreach ($vm in $vms) {
+        $vmInfo = New-Object PSObject
+        $vmInfo.Name = $vm.Name
+        $vmInfo.ResourceGroup = $vm.ResourceGroup
+        $vmInfo.SubscriptionId = $subscriptionId
 
-            // Get owner and DR Tier from tags
-            vmInfo.Owner = GetResourceTag(vm.Tags, "PrimaryContact") ?? GetResourceTag(vm.Tags, "primarycontact");
-            vmInfo.DrTier = GetResourceTag(vm.Tags, "DRTier");
+        # Get owner and DR Tier from tags
+        $vmInfo.Owner = (Get-AzResourceTag -Resource $vm).PrimaryContact ?: (Get-AzResourceTag -Resource $vm).primarycontact
+        $vmInfo.DrTier = Get-AzResourceTag -Resource $vm | Where-Object {$_.Name -eq "DRTier"} | Select-Object Value
 
-            // Check for encryption at host using virtualMachineExtension for each disk
-            var hasHostEncryption = await HasHostEncryption(resourceManagementClient, vm);
-            if (!hasHostEncryption)
-            {
-                vmInfoList.Add(vmInfo);
-            }
+        # Check for encryption at host using virtual machine extension for each disk
+        $hasHostEncryption = (Get-AzVMExtension -VMName $vm.Name -ResourceGroupName $vm.ResourceGroup | Where-Object {$_.Name -like "*AzureDiskEncryption*"}).Count -gt 0
+        if (!$hasHostEncryption) {
+            $vmInfoList += $vmInfo
         }
     }
-
-    return vmInfoList;
 }
 
-public static async Task<bool> HasHostEncryption(ResourceManagementClient client, VirtualMachine vm)
-{
-    foreach (var dataDisk in vm.StorageProfile.DataDisks)
-    {
-        var extension = await client.VirtualMachineExtensions.GetAsync(vm.ResourceGroupName, vm.Name, dataDisk.Name);
-        if (extension != null && extension.Name.Contains("AzureDiskEncryption"))
-        {
-            return true;
-        }
-    }
+# Convert list to DataTable for easier CSV export
+$dataTable = New-Object DataTable($vmInfoList[0].PsObject.Properties.GetKeys())
+$vmInfoList | ForEach-Object { $dataTable.Rows.Add($_.Name, $_.ResourceGroup, $_.SubscriptionId, $_.Owner, $_.DrTier) }
 
-    var extension = await client.VirtualMachineExtensions.GetAsync(vm.ResourceGroupName, vm.Name, vm.OsProfile.OsDisk.Name);
-    return extension != null && extension.Name.Contains("AzureDiskEncryption");
-}
-
-public static string GetResourceTag(IDictionary<string, string> tags, string key)
-{
-    if (tags?.ContainsKey(key) == true)
-    {
-        return tags[key];
-    }
-
-    return null;
-}
-
-public class VmEncryptionInfo
-{
-    public string Name { get; set; }
-    public string ResourceGroup { get; set; }
-    public string SubscriptionId { get; set; }
-    public string Owner { get; set; }
-    public string DrTier { get; set; }
-}
+# Export data table to CSV file
+$dataTable.ExportToCsv("VMsWithoutHostEncryption.csv") -NoTypeInformation

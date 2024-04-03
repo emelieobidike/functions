@@ -1,14 +1,8 @@
-Subject: Enhancing Security for Your VMs with Azure Encryption at Host
+Subject: Enhancing Security for Your Azure VMs with Server-Side Encryption
 Dear Valued Client,
-We are committed to providing you with the highest level of security for your virtual machines (VMs) hosted on our Azure platform. To further strengthen your data protection, we're planning to enable Azure Encryption at Host for your VMs.
-Azure Encryption at Host leverages industry-standard encryption technology to safeguard your VM data at rest. This additional layer of security encrypts your data before it's written to the underlying storage, rendering it inaccessible to unauthorized users even if they gain access to the physical storage infrastructure.
-By enabling Azure Encryption at Host, you'll benefit from:
- * Enhanced data security: Encryption at rest ensures your data remains protected even in the event of a security breach.
- * Improved regulatory compliance: Azure Encryption at Host can help you meet various regulatory compliance requirements for data security.
- * Transparent encryption: The encryption and decryption process is transparent to your applications and users, ensuring no disruption to your workloads.
-We understand that minimizing downtime is critical for your business operations. While Azure Encryption at Host is designed to be a non-intrusive process, there might be a minimal interruption during the enablement phase. To ensure a smooth transition, we'd like to collaborate with you to schedule a suitable time for enabling this feature on your VMs.
-Please reply to this email with your preferred timeframe for enabling Azure Encryption at Host. Our team will work closely with you to minimize any potential downtime and ensure a seamless transition.
-In the meantime, feel free to reach out if you have any questions about Azure Encryption at Host or this upcoming enhancement to your VM security.
-Thank you for your continued trust in our services.
+As part of our commitment to your security and adherence to best practices, we'll be enabling server-side encryption (SSE) on your Azure virtual machines (VMs). This transparent encryption adds an extra layer of protection for your data at rest.
+To implement SSE, a brief VM outage of 10-15 minutes will be necessary. To minimize disruption, we recommend scheduling this activity during our standard Thursday maintenance window.
+If this timeframe doesn't suit your needs, please reply to this email with your preferred time for the outage. We'll do our best to accommodate your request.
+Thank you for your understanding and cooperation. We appreciate your business.
 Sincerely,
-The Azure Team
+The [Your Company Name] Team

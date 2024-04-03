@@ -1,62 +1,79 @@
-using Azure.Identity;
-using Azure.ResourceManager.Compute;
-using Azure.ResourceManager.Resources;
-using System.IO;
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Azure.Management.Compute;
+using Microsoft.Azure.Management.Compute.Models;
+using Microsoft.Azure.Management.ResourceManager;
+using Microsoft.Azure.Management.ResourceManager.Models;
+using Microsoft.Rest;
 
-// Authenticate to Azure
-var credentials = new DefaultAzureCredential(); // Use DefaultAzureCredential if applicable
-
-// Create CSV file with headers
-using (var writer = new StreamWriter("vmEncryptionStatus.csv"))
+public static async Task<List<VmEncryptionInfo>> GetVMsWithoutHostEncryption(string[] subscriptionIds)
 {
-    writer.WriteLine("Subscription,ResourceGroup,Owner,EncryptionAtHost");
+    var vmInfoList = new List<VmEncryptionInfo>();
+    var credentials = SdkContext.AzureCredentialsFactory.FromServicePrincipal(clientId, clientSecret, tenantId, AzureEnvironment.AzureGlobalCloud);
+    var resourceManagementClient = new ResourceManagementClient(credentials) { SubscriptionId = subscriptionIds[0] };
 
-    foreach (var subscriptionId in new[] { "YourSubscriptionId1", "YourSubscriptionId2", "YourSubscriptionId3", "YourSubscriptionId4", "YourSubscriptionId5", "YourSubscriptionId6" })
+    foreach (var subscriptionId in subscriptionIds)
     {
-        try
+        resourceManagementClient.SubscriptionId = subscriptionId;
+        var vms = await resourceManagementClient.VirtualMachines.ListAllAsync();
+
+        foreach (var vm in vms)
         {
-            // Create a resource management client
-            var client = new ArmClient(credentials);
-
-            // Use filters with GetSubscriptions to retrieve desired subscription by ID
-            var subscriptions = client.GetSubscriptions().ToList(filter: $"filter=subscriptionId eq '{subscriptionId}'");
-
-            // Access the first subscription matching the ID (assuming there's only one)
-            var subscription = subscriptions.FirstOrDefault();
-
-            if (subscription != null)
+            var vmInfo = new VmEncryptionInfo
             {
-                var resourceGroups = subscription.GetResourceGroups().List();
+                Name = vm.Name,
+                ResourceGroup = vm.ResourceGroupName,
+                SubscriptionId = subscriptionId
+            };
 
-                // Iterate through resource groups
-                foreach (var resourceGroup in resourceGroups)
-                {
-                    var computeClient = new ComputeManagementClient(client, subscription.Id);
-                    var vms = computeClient.VirtualMachines.List(resourceGroup.Name);
+            // Get owner and DR Tier from tags
+            vmInfo.Owner = GetResourceTag(vm.Tags, "PrimaryContact") ?? GetResourceTag(vm.Tags, "primarycontact");
+            vmInfo.DrTier = GetResourceTag(vm.Tags, "DRTier");
 
-                    // Iterate through VMs
-                    foreach (var vm in vms)
-                    {
-                        var ownerTag = vm.Tags.Where(t => t.Key.Equals("PrimaryContact", StringComparison.OrdinalIgnoreCase) || t.Key.Equals("primarycontact", StringComparison.OrdinalIgnoreCase)).Select(t => t.Value).FirstOrDefault();
-
-                        // Check for encryption at host
-                        var encryptionEnabled = vm.EncryptionSettings?.DiskEncryptionSettings?.EncryptionAtRestEnabled ?? false; // Handle potential null value
-
-                        // Write data to CSV
-                        writer.WriteLine($"{subscription.Id},{resourceGroup.Name},{ownerTag},{encryptionEnabled}");
-                    }
-                }
-            }
-            else
+            // Check for encryption at host using virtualMachineExtension for each disk
+            var hasHostEncryption = await HasHostEncryption(resourceManagementClient, vm);
+            if (!hasHostEncryption)
             {
-                // Handle case where subscription ID is not found
-                Console.WriteLine($"Subscription with ID {subscriptionId} not found.");
+                vmInfoList.Add(vmInfo);
             }
-        }
-        catch (Azure.RequestFailedException ex) when (ex.Message.Contains("ResourceNotFound"))
-        {
-            // Handle the case where a resource group is not found
         }
     }
+
+    return vmInfoList;
+}
+
+public static async Task<bool> HasHostEncryption(ResourceManagementClient client, VirtualMachine vm)
+{
+    foreach (var dataDisk in vm.StorageProfile.DataDisks)
+    {
+        var extension = await client.VirtualMachineExtensions.GetAsync(vm.ResourceGroupName, vm.Name, dataDisk.Name);
+        if (extension != null && extension.Name.Contains("AzureDiskEncryption"))
+        {
+            return true;
+        }
+    }
+
+    var extension = await client.VirtualMachineExtensions.GetAsync(vm.ResourceGroupName, vm.Name, vm.OsProfile.OsDisk.Name);
+    return extension != null && extension.Name.Contains("AzureDiskEncryption");
+}
+
+public static string GetResourceTag(IDictionary<string, string> tags, string key)
+{
+    if (tags?.ContainsKey(key) == true)
+    {
+        return tags[key];
+    }
+
+    return null;
+}
+
+public class VmEncryptionInfo
+{
+    public string Name { get; set; }
+    public string ResourceGroup { get; set; }
+    public string SubscriptionId { get; set; }
+    public string Owner { get; set; }
+    public string DrTier { get; set; }
 }

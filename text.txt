@@ -1,8 +1,75 @@
-Subject: Enhancing Security for Your Azure VMs with Server-Side Encryption
-Dear Valued Client,
-As part of our commitment to your security and adherence to best practices, we'll be enabling server-side encryption (SSE) on your Azure virtual machines (VMs). This transparent encryption adds an extra layer of protection for your data at rest.
-To implement SSE, a brief VM outage of 10-15 minutes will be necessary. To minimize disruption, we recommend scheduling this activity during our standard Thursday maintenance window.
-If this timeframe doesn't suit your needs, please reply to this email with your preferred time for the outage. We'll do our best to accommodate your request.
-Thank you for your understanding and cooperation. We appreciate your business.
-Sincerely,
-The [Your Company Name] Team
+You're correct; calculating the percentage based on the number of rows to delete would provide a more accurate representation of the task's progress. To implement this, we would need to first calculate the total number of rows to delete across all tables and storage accounts. Then, as we delete rows, we can update the percentage based on the number of rows deleted so far.
+
+Here's an updated version of the C# code that includes this logic:
+
+using Azure;
+using Azure.Data.Tables;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+class Program
+{
+static async Task Main(string[] args)
+{
+var storageAccountConnectionStrings = new List<string>() // Replace with your actual connection strings
+{
+// ... Your storage account connection strings
+};
+
+long totalRowsToDelete = 0;
+long deletedRowsCount = 0;
+
+// First, calculate the total number of rows to delete
+foreach (var connectionString in storageAccountConnectionStrings)
+{
+var serviceClient = new TableServiceClient(connectionString);
+await foreach (var table in serviceClient.GetTablesAsync())
+{
+var tableClient = serviceClient.GetTableClient(table.Name);
+var queryOptions = new TableQueryOptions
+{
+Filter = TableClient.CreateQueryFilter($"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365)}")
+};
+
+var rowCount = await tableClient.QueryAsync<TableEntity>(queryOptions: queryOptions).GetCountAsync();
+totalRowsToDelete += rowCount;
+}
+}
+
+// Then, loop through each table and delete the rows
+foreach (var connectionString in storageAccountConnectionStrings)
+{
+var serviceClient = new TableServiceClient(connectionString);
+await foreach (var table in serviceClient.GetTablesAsync())
+{
+var tableClient = serviceClient.GetTableClient(table.Name);
+var queryOptions = new TableQueryOptions
+{
+Filter = TableClient.CreateQueryFilter($"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365)}")
+};
+
+await foreach (var entity in tableClient.QueryAsync<TableEntity>(queryOptions: queryOptions))
+{
+await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
+deletedRowsCount++;
+Console.WriteLine($"Progress: {((double)deletedRowsCount / totalRowsToDelete).ToString("P")} completed.");
+}
+}
+}
+}
+
+private static async Task<long> GetCountAsync<T>(this AsyncPageable<T> asyncPageable)
+{
+long count = 0;
+await foreach (var _ in asyncPageable)
+{
+count++;
+}
+return count;
+}
+}
+
+This code includes a helper method GetCountAsync to count the rows asynchronously. It first calculates the total number of rows to delete and then updates the progress percentage based on the number of rows deleted during the process.
+
+Please note that this approach may take a significant amount of time if the tables contain a large number of entities, as it needs to count all entities before starting the deletion process. Also, ensure to handle potential exceptions and errors appropriately in a production environment.

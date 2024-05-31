@@ -44,7 +44,15 @@ foreach ($subscriptionId in $subscriptions) {
         $appName = $functionApp.Name
         $tags = $functionApp.Tags
 
+        # Try to get the primary contact from the Function App tags
         $primaryContact = Get-PrimaryContact -Tags $tags
+
+        # If primary contact is not found in Function App tags, check Resource Group tags
+        if (-not $primaryContact) {
+            $resourceGroup = Get-AzResourceGroup -Name $resourceGroupName
+            $resourceGroupTags = $resourceGroup.Tags
+            $primaryContact = Get-PrimaryContact -Tags $resourceGroupTags
+        }
 
         # Add to results array
         $results += [PSCustomObject]@{

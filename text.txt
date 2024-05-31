@@ -1,66 +1,65 @@
-I see, let's update the code to reflect the changes in the Azure.Data.Tables library. Since TableQueryOptions is no longer supported, we can use the Where method to filter the entities directly in the query. Here's how you can modify the code:
+# Define the subscriptions to iterate over
+$subscriptions = @(
+    "subscription-id-1",
+    "subscription-id-2",
+    "subscription-id-3",
+    "subscription-id-4",
+    "subscription-id-5",
+    "subscription-id-6",
+    "subscription-id-7",
+    "subscription-id-8"
+)
 
-using Azure;
-using Azure.Data.Tables;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
-class Program
-{
-static async Task Main(string[] args)
-{
-var storageAccountConnectionStrings = new List<string>() // Replace with your actual connection strings
-{
-// ... Your storage account connection strings
-};
-
-long totalRowsToDelete = 0;
-long deletedRowsCount = 0;
-
-// First, calculate the total number of rows to delete
-foreach (var connectionString in storageAccountConnectionStrings)
-{
-var serviceClient = new TableServiceClient(connectionString);
-await foreach (var table in serviceClient.GetTablesAsync())
-{
-var tableClient = serviceClient.GetTableClient(table.Name);
-var filter = $"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365):o}";
-var rowCount = await tableClient.QueryAsync<TableEntity>(filter).GetCountAsync();
-totalRowsToDelete += rowCount;
-}
+# Function to get primary contact from tags
+function Get-PrimaryContact {
+    param (
+        [hashtable]$Tags
+    )
+    $possibleTags = @('Primary_contact', 'primary_contact', 'primaryContact', 'primarycontact')
+    foreach ($tag in $possibleTags) {
+        if ($Tags.ContainsKey($tag)) {
+            return $Tags[$tag]
+        }
+    }
+    return $null
 }
 
-// Then, loop through each table and delete the rows
-foreach (var connectionString in storageAccountConnectionStrings)
-{
-var serviceClient = new TableServiceClient(connectionString);
-await foreach (var table in serviceClient.GetTablesAsync())
-{
-var tableClient = serviceClient.GetTableClient(table.Name);
-var filter = $"Timestamp lt {DateTimeOffset.UtcNow.AddDays(-365):o}";
+# Log in to Azure
+Write-Host "Logging into Azure..."
+Connect-AzAccount
 
-await foreach (var entity in tableClient.QueryAsync<TableEntity>(filter))
-{
-await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
-deletedRowsCount++;
-Console.WriteLine($"Progress: {((double)deletedRowsCount / totalRowsToDelete):P} completed.");
-}
-}
-}
+# Array to hold the result
+$results = @()
+
+# Iterate over each subscription
+foreach ($subscriptionId in $subscriptions) {
+    Write-Host "Switching to subscription: $subscriptionId"
+    Set-AzContext -SubscriptionId $subscriptionId
+
+    # Get all Function Apps in the current subscription
+    $functionApps = Get-AzWebApp -FunctionApp
+
+    foreach ($functionApp in $functionApps) {
+        $resourceGroupName = $functionApp.ResourceGroup
+        $appName = $functionApp.Name
+        $tags = $functionApp.Tags
+
+        $primaryContact = Get-PrimaryContact -Tags $tags
+
+        # Add to results array
+        $results += [PSCustomObject]@{
+            FunctionAppName    = $appName
+            SubscriptionId     = $subscriptionId
+            ResourceGroupName  = $resourceGroupName
+            PrimaryContact     = $primaryContact
+        }
+    }
 }
 
-private static async Task<long> GetCountAsync<T>(this AsyncPageable<T> asyncPageable)
-{
-long count = 0;
-await foreach (var _ in asyncPageable)
-{
-count++;
-}
-return count;
-}
-}
+# Path to the CSV file
+$outputCsv = "FunctionAppsPrimaryContacts.csv"
 
-This updated code uses the Where method to apply the filter directly in the QueryAsync method call. The GetCountAsync method remains the same to count the entities asynchronously.
+# Export results to CSV
+$results | Export-Csv -Path $outputCsv -NoTypeInformation
 
-Please ensure that you have the necessary permissions and that you test this code thoroughly in a development environment before deploying it in production. Also, consider implementing proper error handling and logging to track the progress and any issues that may arise during the execution of this task.
+Write-Host "Results have been exported to $outputCsv"

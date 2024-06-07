@@ -1,4 +1,4 @@
-# Define the subscriptions to iterate over
+# List of subscriptions
 $subscriptions = @(
     "subscription-id-1",
     "subscription-id-2",
@@ -6,68 +6,41 @@ $subscriptions = @(
     "subscription-id-4",
     "subscription-id-5",
     "subscription-id-6",
-    "subscription-id-7",
-    "subscription-id-8"
+    "subscription-id-7"
 )
 
-# Function to get primary contact from tags
-function Get-PrimaryContact {
-    param (
-        [hashtable]$Tags
-    )
-    $possibleTags = @('Primary_contact', 'primary_contact', 'primaryContact', 'primarycontact')
-    foreach ($tag in $possibleTags) {
-        if ($Tags.ContainsKey($tag)) {
-            return $Tags[$tag]
-        }
-    }
-    return $null
-}
-
-# Log in to Azure
-Write-Host "Logging into Azure..."
-Connect-AzAccount
-
-# Array to hold the result
+# Array to hold the results
 $results = @()
 
-# Iterate over each subscription
 foreach ($subscriptionId in $subscriptions) {
-    Write-Host "Switching to subscription: $subscriptionId"
+    # Set the current subscription context
     Set-AzContext -SubscriptionId $subscriptionId
 
     # Get all Function Apps in the current subscription
     $functionApps = Get-AzWebApp -FunctionApp
 
     foreach ($functionApp in $functionApps) {
-        $resourceGroupName = $functionApp.ResourceGroup
-        $appName = $functionApp.Name
-        $tags = $functionApp.Tags
+        # Get the current minimum TLS version for the Function App
+        $config = Get-AzWebAppConfig -ResourceGroupName $functionApp.ResourceGroup -Name $functionApp.Name
 
-        # Try to get the primary contact from the Function App tags
-        $primaryContact = Get-PrimaryContact -Tags $tags
-
-        # If primary contact is not found in Function App tags, check Resource Group tags
-        if (-not $primaryContact) {
-            $resourceGroup = Get-AzResourceGroup -Name $resourceGroupName
-            $resourceGroupTags = $resourceGroup.Tags
-            $primaryContact = Get-PrimaryContact -Tags $resourceGroupTags
+        # Create a custom object to store the information
+        $result = [PSCustomObject]@{
+            FunctionAppName = $functionApp.Name
+            SubscriptionId  = $subscriptionId
+            ResourceGroup   = $functionApp.ResourceGroup
+            MinimumTlsVersion = $config.MinTlsVersion
         }
 
-        # Add to results array
-        $results += [PSCustomObject]@{
-            FunctionAppName    = $appName
-            SubscriptionId     = $subscriptionId
-            ResourceGroupName  = $resourceGroupName
-            PrimaryContact     = $primaryContact
-        }
+        # Add the result to the array
+        $results += $result
     }
 }
 
-# Path to the CSV file
-$outputCsv = "FunctionAppsPrimaryContacts.csv"
+# Define the CSV file path
+$csvFilePath = "C:\path\to\functionAppsTlsVersions.csv"
 
-# Export results to CSV
-$results | Export-Csv -Path $outputCsv -NoTypeInformation
+# Export the results to a CSV file
+$results | Export-Csv -Path $csvFilePath -NoTypeInformation
 
-Write-Host "Results have been exported to $outputCsv"
+# Output the location of the CSV file
+Write-Output "Results exported to $csvFilePath"

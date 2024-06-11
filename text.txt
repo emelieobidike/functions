@@ -1,46 +1,29 @@
-# List of subscriptions
-$subscriptions = @(
-    "subscription-id-1",
-    "subscription-id-2",
-    "subscription-id-3",
-    "subscription-id-4",
-    "subscription-id-5",
-    "subscription-id-6",
-    "subscription-id-7"
-)
+# Define the storage account names
+$storageAccounts = @("Account1", "Account2", "Account3")
 
-# Array to hold the results
+# Initialize an empty array to store the results
 $results = @()
 
-foreach ($subscriptionId in $subscriptions) {
-    # Set the current subscription context
-    Set-AzContext -SubscriptionId $subscriptionId
+# Loop through each storage account
+foreach ($account in $storageAccounts) {
+    # Get the storage account key
+    $keys = Get-AzStorageAccountKey -ResourceGroupName "YourResourceGroupName" -Name $account
+    $storageAccountKey = $keys[0].Value
 
-    # Get all Function Apps in the current subscription
-    $functionApps = Get-AzWebApp -FunctionApp
+    # Create the storage context
+    $ctx = New-AzStorageContext -StorageAccountName $account -StorageAccountKey $storageAccountKey
 
-    foreach ($functionApp in $functionApps) {
-        # Get the current minimum TLS version for the Function App
-        $config = Get-AzWebAppConfig -ResourceGroupName $functionApp.ResourceGroup -Name $functionApp.Name
+    # List the containers
+    $containers = Get-AzStorageContainer -Context $ctx
 
-        # Create a custom object to store the information
-        $result = [PSCustomObject]@{
-            FunctionAppName = $functionApp.Name
-            SubscriptionId  = $subscriptionId
-            ResourceGroup   = $functionApp.ResourceGroup
-            MinimumTlsVersion = $config.MinTlsVersion
+    # Add the results to the array
+    foreach ($container in $containers) {
+        $results += [pscustomobject]@{
+            StorageAccount = $account
+            ContainerName  = $container.Name
         }
-
-        # Add the result to the array
-        $results += $result
     }
 }
 
-# Define the CSV file path
-$csvFilePath = "C:\path\to\functionAppsTlsVersions.csv"
-
 # Export the results to a CSV file
-$results | Export-Csv -Path $csvFilePath -NoTypeInformation
-
-# Output the location of the CSV file
-Write-Output "Results exported to $csvFilePath"
+$results | Export-Csv -Path "StorageAccountContainers.csv" -NoTypeInformation

@@ -1,17 +1,24 @@
-# Define the storage account names
-$storageAccounts = @("Account1", "Account2", "Account3")
+# Define the storage accounts and their corresponding subscriptions and resource groups
+$storageAccounts = @(
+    @{ Name = "Account1"; SubscriptionId = "SubscriptionId1"; ResourceGroup = "ResourceGroup1" },
+    @{ Name = "Account2"; SubscriptionId = "SubscriptionId2"; ResourceGroup = "ResourceGroup2" },
+    @{ Name = "Account3"; SubscriptionId = "SubscriptionId3"; ResourceGroup = "ResourceGroup3" }
+)
 
 # Initialize an empty array to store the results
 $results = @()
 
 # Loop through each storage account
 foreach ($account in $storageAccounts) {
+    # Set the current subscription context
+    Set-AzContext -SubscriptionId $account.SubscriptionId
+
     # Get the storage account key
-    $keys = Get-AzStorageAccountKey -ResourceGroupName "YourResourceGroupName" -Name $account
+    $keys = Get-AzStorageAccountKey -ResourceGroupName $account.ResourceGroup -Name $account.Name
     $storageAccountKey = $keys[0].Value
 
     # Create the storage context
-    $ctx = New-AzStorageContext -StorageAccountName $account -StorageAccountKey $storageAccountKey
+    $ctx = New-AzStorageContext -StorageAccountName $account.Name -StorageAccountKey $storageAccountKey
 
     # List the containers
     $containers = Get-AzStorageContainer -Context $ctx
@@ -19,7 +26,7 @@ foreach ($account in $storageAccounts) {
     # Add the results to the array
     foreach ($container in $containers) {
         $results += [pscustomobject]@{
-            StorageAccount = $account
+            StorageAccount = $account.Name
             ContainerName  = $container.Name
         }
     }

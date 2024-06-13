@@ -1,78 +1,54 @@
-# Define the list of subscriptions
-$subscriptions = @(
-    "subscription1-id",
-    "subscription2-id",
-    "subscription3-id",
-    "subscription4-id",
-    "subscription5-id",
-    "subscription6-id",
-    "subscription7-id"
-)
+Certainly! Here is a sample email you can use to reach out to the owners of the non-compliant web apps:
 
-# Define the CSV output file
-$outputCsv = "WebServicesStatus.csv"
+---
 
-# Initialize the CSV file
-"WebService,Subscription,HttpStatus,Owner" | Out-File -FilePath $outputCsv
+**Subject: Upcoming Change: Mandatory HTTPS for App Service Apps**
 
-# Function to check HTTP status
-function Test-HttpStatus {
-    param (
-        [string]$url
-    )
-    try {
-        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -Method Head -ErrorAction Stop
-        if ($response.StatusCode -eq 200) {
-            return "Reachable"
-        } else {
-            return "Not Reachable"
-        }
-    } catch {
-        return "Not Reachable"
-    }
-}
+Dear [App Owner's Name],
 
-# Function to get the owner from tags
-function Get-Owner {
-    param (
-        [Hashtable]$tags
-    )
+I hope this message finds you well.
 
-    $possibleTags = @("primary_contact", "PrimaryContact", "Primary_Contact", "primaryContact")
+We are writing to inform you about an important policy update regarding the security of our App Service applications. As part of our ongoing commitment to enhance the security and integrity of our applications, we have assigned the Azure policy **“App Service apps should only be accessible over HTTPS”**.
 
-    foreach ($tag in $possibleTags) {
-        if ($tags.ContainsKey($tag)) {
-            return $tags[$tag]
-        }
-    }
-    return $null
-}
+### Current Non-Compliance
+It has come to our attention that the following web apps under your management are currently non-compliant with this policy:
 
-# Iterate through each subscription
-foreach ($subscription in $subscriptions) {
-    # Set the context to the current subscription
-    Set-AzContext -SubscriptionId $subscription
+1. [Web App 1 Name]
+2. [Web App 2 Name]
 
-    # Get all web services in the subscription
-    $webServices = Get-AzResource -ResourceType "Microsoft.Web/sites"
+### Upcoming Changes
+To comply with this policy, all App Service apps must be configured to only accept HTTPS traffic. HTTP traffic will be automatically redirected to HTTPS. This change is crucial for ensuring that all data transmitted between the server and clients is encrypted and secure.
 
-    foreach ($webService in $webServices) {
-        $url = "http://" + $webService.Name
-        $httpStatus = Test-HttpStatus -url $url
+### Action Required
+Please take the necessary steps to update your web apps to support HTTPS. You can follow these steps to enforce HTTPS:
 
-        # Attempt to get the owner from the web service tags
-        $owner = Get-Owner -tags $webService.Tags
+1. **Navigate to the Azure Portal.**
+2. **Select your App Service app.**
+3. **Under the 'Settings' section, select 'TLS/SSL settings'.**
+4. **Set the 'HTTPS Only' option to 'On'.**
 
-        # If owner is not found, check the resource group tags
-        if (-not $owner) {
-            $resourceGroup = Get-AzResourceGroup -Name $webService.ResourceGroupName
-            $owner = Get-Owner -tags $resourceGroup.Tags
-        }
+You can find more detailed instructions in the [Azure documentation](https://docs.microsoft.com/en-us/azure/app-service/configure-ssl-bindings#enforce-https).
 
-        # Write the result to the CSV file
-        $result = "$($webService.Name),$subscription,$httpStatus,$owner"
-        $result | Out-File -FilePath $outputCsv -Append
-    }
-}
+### Consequences of Non-Compliance
+Failing to comply with this policy by [Compliance Deadline Date] will result in:
 
-Write-Host "Web service status check completed. Results saved to $outputCsv"
+- Automatic redirection of HTTP requests to HTTPS.
+- Potential disruption of service if the HTTPS configuration is not properly set up.
+- Increased security risks due to unencrypted data transmission.
+
+### Support
+If you require any assistance in making these changes or have any questions regarding this policy, please do not hesitate to contact the IT support team at [Support Email] or refer to the [Azure Support](https://docs.microsoft.com/en-us/azure/support/) resources.
+
+We appreciate your prompt attention to this matter to ensure the security and compliance of our applications.
+
+Thank you for your cooperation.
+
+Best regards,
+
+[Your Name]  
+[Your Position]  
+[Your Contact Information]
+
+---
+
+Feel free to customize this email to fit your organization’s tone and any additional information you might need to include.

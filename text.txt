@@ -1,54 +1,40 @@
-Certainly! Here is a sample email you can use to reach out to the owners of the non-compliant web apps:
+Subject: Important Update: Enforcing HTTPS for Your Web App
 
----
-
-**Subject: Upcoming Change: Mandatory HTTPS for App Service Apps**
-
-Dear [App Owner's Name],
+Dear [Client's Name],
 
 I hope this message finds you well.
 
-We are writing to inform you about an important policy update regarding the security of our App Service applications. As part of our ongoing commitment to enhance the security and integrity of our applications, we have assigned the Azure policy **“App Service apps should only be accessible over HTTPS”**.
+We are reaching out to inform you of an important upcoming change that will affect your web application hosted on our platform. To enhance the security of our services and protect your data, we are updating our policy regarding HTTPS access.
 
-### Current Non-Compliance
-It has come to our attention that the following web apps under your management are currently non-compliant with this policy:
+### Upcoming Policy Change:
+Effective [Effective Date], we will be implementing a new policy titled “App Service apps should only be accessible over HTTPS” with an enforcement effect of "deny". This means that any App Service applications that are not configured to use HTTPS will face operational restrictions.
 
-1. [Web App 1 Name]
-2. [Web App 2 Name]
+### How This Affects Your Web App:
+Our recent audit indicates that your web application, [Web App Name], is currently non-compliant with this policy. Here are the key implications for your web app:
+- **Creation and Update Restrictions**: Any attempts to create or update non-compliant web apps will be denied until they are configured to enforce HTTPS.
+- **Compliance Requirement**: To avoid service disruptions, it is imperative that your web app be updated to comply with the HTTPS requirement before the enforcement date.
 
-### Upcoming Changes
-To comply with this policy, all App Service apps must be configured to only accept HTTPS traffic. HTTP traffic will be automatically redirected to HTTPS. This change is crucial for ensuring that all data transmitted between the server and clients is encrypted and secure.
+### Actions Required:
+To ensure continuous operation of your web application, please follow these steps to enable HTTPS:
+1. **Enable HTTPS in App Service**:
+   - Navigate to your App Service in the Azure Portal.
+   - Go to the "TLS/SSL settings" blade.
+   - Set "HTTPS Only" to "On".
 
-### Action Required
-Please take the necessary steps to update your web apps to support HTTPS. You can follow these steps to enforce HTTPS:
+2. **Verify Compliance**:
+   - Ensure that all web traffic is redirected to HTTPS.
+   - Test your web application to confirm it is accessible over HTTPS.
 
-1. **Navigate to the Azure Portal.**
-2. **Select your App Service app.**
-3. **Under the 'Settings' section, select 'TLS/SSL settings'.**
-4. **Set the 'HTTPS Only' option to 'On'.**
+### Assistance and Support:
+We understand that this may require some adjustments on your part, and we are here to assist you through this transition. Please do not hesitate to reach out to our support team at [Support Email] or [Support Phone Number] if you need any help or have any questions.
 
-You can find more detailed instructions in the [Azure documentation](https://docs.microsoft.com/en-us/azure/app-service/configure-ssl-bindings#enforce-https).
+Ensuring the security of your applications and data is our top priority. We appreciate your prompt attention to this matter and your cooperation in implementing these necessary changes.
 
-### Consequences of Non-Compliance
-Failing to comply with this policy by [Compliance Deadline Date] will result in:
-
-- Automatic redirection of HTTP requests to HTTPS.
-- Potential disruption of service if the HTTPS configuration is not properly set up.
-- Increased security risks due to unencrypted data transmission.
-
-### Support
-If you require any assistance in making these changes or have any questions regarding this policy, please do not hesitate to contact the IT support team at [Support Email] or refer to the [Azure Support](https://docs.microsoft.com/en-us/azure/support/) resources.
-
-We appreciate your prompt attention to this matter to ensure the security and compliance of our applications.
-
-Thank you for your cooperation.
+Thank you for your understanding and support.
 
 Best regards,
 
 [Your Name]  
 [Your Position]  
-[Your Contact Information]
-
----
-
-Feel free to customize this email to fit your organization’s tone and any additional information you might need to include.
+[Your Contact Information]  
+[Company Name]

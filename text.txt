@@ -1,40 +1,61 @@
-Subject: Important Update: Enforcing HTTPS for Your Web App
+# Install Azure PowerShell module if not already installed
+if (-not (Get-Module -ListAvailable -Name Az)) {
+    Install-Module -Name Az -Scope CurrentUser -Force -AllowClobber
+}
 
-Dear [Client's Name],
+# Import Azure PowerShell module
+Import-Module Az
 
-I hope this message finds you well.
+# Connect to Azure
+Connect-AzAccount
 
-We are reaching out to inform you of an important upcoming change that will affect your web application hosted on our platform. To enhance the security of our services and protect your data, we are updating our policy regarding HTTPS access.
+# Define the output CSV file
+$outputCsv = "NonCompliantStorageAccounts.csv"
 
-### Upcoming Policy Change:
-Effective [Effective Date], we will be implementing a new policy titled “App Service apps should only be accessible over HTTPS” with an enforcement effect of "deny". This means that any App Service applications that are not configured to use HTTPS will face operational restrictions.
+# Initialize an array to hold the results
+$results = @()
 
-### How This Affects Your Web App:
-Our recent audit indicates that your web application, [Web App Name], is currently non-compliant with this policy. Here are the key implications for your web app:
-- **Creation and Update Restrictions**: Any attempts to create or update non-compliant web apps will be denied until they are configured to enforce HTTPS.
-- **Compliance Requirement**: To avoid service disruptions, it is imperative that your web app be updated to comply with the HTTPS requirement before the enforcement date.
+# Get all subscriptions in the tenant
+$subscriptions = Get-AzSubscription
 
-### Actions Required:
-To ensure continuous operation of your web application, please follow these steps to enable HTTPS:
-1. **Enable HTTPS in App Service**:
-   - Navigate to your App Service in the Azure Portal.
-   - Go to the "TLS/SSL settings" blade.
-   - Set "HTTPS Only" to "On".
+foreach ($subscription in $subscriptions) {
+    Set-AzContext -Subscription $subscription.Id
 
-2. **Verify Compliance**:
-   - Ensure that all web traffic is redirected to HTTPS.
-   - Test your web application to confirm it is accessible over HTTPS.
+    # Get all storage accounts in the subscription
+    $storageAccounts = Get-AzStorageAccount
 
-### Assistance and Support:
-We understand that this may require some adjustments on your part, and we are here to assist you through this transition. Please do not hesitate to reach out to our support team at [Support Email] or [Support Phone Number] if you need any help or have any questions.
+    foreach ($storageAccount in $storageAccounts) {
+        $config = Get-AzStorageAccount -ResourceGroupName $storageAccount.ResourceGroupName -Name $storageAccount.StorageAccountName
 
-Ensuring the security of your applications and data is our top priority. We appreciate your prompt attention to this matter and your cooperation in implementing these necessary changes.
+        if ($config.MinimumTlsVersion -ne "TLS1_2") {
+            $owner = $null
+            $tags = $storageAccount.Tags
+            if ($tags) {
+                $owner = $tags["primary_contact"] ?? $tags["primarycontact"] ?? $tags["Primary_Contact"] ?? $tags["PrimaryContact"]
+            }
 
-Thank you for your understanding and support.
+            if (-not $owner) {
+                # If the owner is not found on the storage account, check the resource group tags
+                $resourceGroup = Get-AzResourceGroup -Name $storageAccount.ResourceGroupName
+                $rgTags = $resourceGroup.Tags
+                if ($rgTags) {
+                    $owner = $rgTags["primary_contact"] ?? $rgTags["primarycontact"] ?? $rgTags["Primary_Contact"] ?? $rgTags["PrimaryContact"]
+                }
+            }
 
-Best regards,
+            # Add the result to the array
+            $results += [PSCustomObject]@{
+                SubscriptionName = $subscription.Name
+                ResourceGroupName = $storageAccount.ResourceGroupName
+                StorageAccountName = $storageAccount.StorageAccountName
+                Owner = $owner
+                CurrentTlsVersion = $config.MinimumTlsVersion
+            }
+        }
+    }
+}
 
-[Your Name]  
-[Your Position]  
-[Your Contact Information]  
-[Company Name]
+# Export the results to a CSV file
+$results | Export-Csv -Path $outputCsv -NoTypeInformation
+
+Write-Output "Results exported to $outputCsv"

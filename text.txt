@@ -1,19 +1,31 @@
-trigger:
-- main
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-steps:
-- powershell: |
-    $jsonFiles = Get-ChildItem -Path . -Filter *.json -Recurse
-    foreach ($file in $jsonFiles) {
-        Write-Host "Validating $($file.FullName)"
-        try {
-            $content = Get-Content $file.FullName | Out-String | ConvertFrom-Json
-        } catch {
-            Write-Error "$($file.FullName) is not valid JSON."
-            exit 1
+"policyRule": {
+    "if": {
+      "allOf": [
+        {
+          "field": "type",
+          "equals": "Microsoft.Compute/virtualMachines"
+        },
+        {
+          "count": {
+            "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*]",
+            "where": {
+              "allOf": [
+                {
+                  "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*].providerSpecificDetails.vmId",
+                  "equals": "[resourceId('Microsoft.Compute/virtualMachines', field('name'))]"
+                },
+                {
+                  "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*].providerSpecificDetails.replicationState",
+                  "notEquals": "Protected"
+                }
+              ]
+            }
+          },
+          "greater": 0
         }
+      ]
+    },
+    "then": {
+      "effect": "audit"
     }
-  displayName: 'Check JSON Syntax'
+  }

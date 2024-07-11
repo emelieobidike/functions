@@ -1,61 +1,19 @@
-# Install Azure PowerShell module if not already installed
-if (-not (Get-Module -ListAvailable -Name Az)) {
-    Install-Module -Name Az -Scope CurrentUser -Force -AllowClobber
-}
+trigger:
+- main
 
-# Import Azure PowerShell module
-Import-Module Az
+pool:
+  vmImage: 'ubuntu-latest'
 
-# Connect to Azure
-Connect-AzAccount
-
-# Define the output CSV file
-$outputCsv = "NonCompliantStorageAccounts.csv"
-
-# Initialize an array to hold the results
-$results = @()
-
-# Get all subscriptions in the tenant
-$subscriptions = Get-AzSubscription
-
-foreach ($subscription in $subscriptions) {
-    Set-AzContext -Subscription $subscription.Id
-
-    # Get all storage accounts in the subscription
-    $storageAccounts = Get-AzStorageAccount
-
-    foreach ($storageAccount in $storageAccounts) {
-        $config = Get-AzStorageAccount -ResourceGroupName $storageAccount.ResourceGroupName -Name $storageAccount.StorageAccountName
-
-        if ($config.MinimumTlsVersion -ne "TLS1_2") {
-            $owner = $null
-            $tags = $storageAccount.Tags
-            if ($tags) {
-                $owner = $tags["primary_contact"] ?? $tags["primarycontact"] ?? $tags["Primary_Contact"] ?? $tags["PrimaryContact"]
-            }
-
-            if (-not $owner) {
-                # If the owner is not found on the storage account, check the resource group tags
-                $resourceGroup = Get-AzResourceGroup -Name $storageAccount.ResourceGroupName
-                $rgTags = $resourceGroup.Tags
-                if ($rgTags) {
-                    $owner = $rgTags["primary_contact"] ?? $rgTags["primarycontact"] ?? $rgTags["Primary_Contact"] ?? $rgTags["PrimaryContact"]
-                }
-            }
-
-            # Add the result to the array
-            $results += [PSCustomObject]@{
-                SubscriptionName = $subscription.Name
-                ResourceGroupName = $storageAccount.ResourceGroupName
-                StorageAccountName = $storageAccount.StorageAccountName
-                Owner = $owner
-                CurrentTlsVersion = $config.MinimumTlsVersion
-            }
+steps:
+- powershell: |
+    $jsonFiles = Get-ChildItem -Path . -Filter *.json -Recurse
+    foreach ($file in $jsonFiles) {
+        Write-Host "Validating $($file.FullName)"
+        try {
+            $content = Get-Content $file.FullName | Out-String | ConvertFrom-Json
+        } catch {
+            Write-Error "$($file.FullName) is not valid JSON."
+            exit 1
         }
     }
-}
-
-# Export the results to a CSV file
-$results | Export-Csv -Path $outputCsv -NoTypeInformation
-
-Write-Output "Results exported to $outputCsv"
+  displayName: 'Check JSON Syntax'

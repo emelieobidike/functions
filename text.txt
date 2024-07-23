@@ -1,31 +1,63 @@
-"policyRule": {
-    "if": {
-      "allOf": [
-        {
-          "field": "type",
-          "equals": "Microsoft.Compute/virtualMachines"
-        },
-        {
-          "count": {
-            "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*]",
-            "where": {
-              "allOf": [
-                {
-                  "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*].providerSpecificDetails.vmId",
-                  "equals": "[resourceId('Microsoft.Compute/virtualMachines', field('name'))]"
-                },
-                {
-                  "field": "Microsoft.RecoveryServices/vaults/replicationFabrics/replicationProtectionContainers/replicationProtectedItems[*].providerSpecificDetails.replicationState",
-                  "notEquals": "Protected"
-                }
-              ]
-            }
-          },
-          "greater": 0
-        }
-      ]
-    },
-    "then": {
-      "effect": "audit"
-    }
-  }
+My name is Yomi Sowunmi, and I am an experienced Information Systems and Azure Cloud Engineer based in Houston, Texas. With about six years of experience in the industry, I specialize in maintaining cutting-edge technical skills and staying up-to-date with industry knowledge.
+
+My expertise lies in advanced problem-solving, Linux, Microsoft Office 365, time management, Azure Cloud Infrastructure, Python, NodeJS, Terraform, Azure DevOps, Azure CLI, PowerShell, ARM Templates, and .Net Development. Throughout my career, I have successfully managed a range of responsibilities and projects.
+
+Currently, I am an Azure Cloud Administrator at Wimmer Solutions. My role involves deploying and configuring virtual machines, networks, and storage solutions, setting up various Azure services, implementing security measures, and ensuring compliance with organizational policies. I also manage backup policies, disaster recovery plans, and optimize cloud expenditures.
+
+Previously, I worked as an Azure Cloud Architect at Protiviti, where I focused on deploying, configuring, and maintaining compute on Azure Cloud. I also automated deployment and troubleshooting mechanisms, migrated virtual machines using VMware, and developed multiple Spark scripts in Python. My efforts contributed to significant cost reductions and streamlined operations.
+
+Earlier in my career, I served as an Azure Cloud Engineer at Asurion, managing virtual networks, subnets, and network security groups. I was also involved in troubleshooting VPN connections, mentoring new colleagues, and collaborating cross-functionally to enhance post-deployment customer experiences.
+
+I hold a Bachelor of Science in Supply Chain and Logistics Technology with a minor in Computer Information Systems from the University of Houston, as well as an Associate of Science in Computer Information Systems from Houston Community College. Additionally, I am certified in Microsoft Azure Fundamentals, Microsoft AZ-104, Professional Scrum Master I, Project Management Professional (PMP), and Certified ServiceNow Administrator (CSA).
+
+In summary, I am passionate about leveraging my skills and experience to contribute to innovative and efficient cloud solutions.
+
+1. Can you tell us more about your current role at Wimmer Solutions?
+
+Answer:
+At Wimmer Solutions, I work as an Azure Cloud Administrator. My responsibilities include deploying and configuring virtual machines, networks, and storage solutions. I also set up Azure services such as Azure App Services and Azure Functions, and use tools like Azure Monitor, Azure Log Analytics, and Application Insights to track the performance and health of Azure resources. Additionally, I implement security measures, ensure compliance with organizational policies, manage backup policies, and optimize cloud expenditure. I also write scripts using PowerShell or Azure CLI to automate routine tasks and implement Infrastructure as Code (IaC) practices using tools like Terraform.
+
+2. How have you contributed to cost optimization in your previous roles?
+
+Answer:
+In my current role at Wimmer Solutions, I utilize Azure Cost Management and billing tools to monitor and optimize cloud expenditure. I identify and implement cost-saving measures by analyzing usage patterns and optimizing resource allocation. For example, I have implemented strategies like rightsizing virtual machines, leveraging reserved instances, and optimizing storage solutions to reduce costs. In my previous role at Protiviti, I migrated existing environments to the cloud, which helped decrease infrastructure operating costs significantly.
+
+3. Can you describe a challenging project you worked on and how you handled it?
+
+Answer:
+One challenging project I worked on was at Protiviti, where I led the migration of existing environments (DEV) to the cloud for external web applications. This involved extensive planning, coordination, and troubleshooting to ensure a smooth transition. I used tools like VMware for migrating virtual machines and collaborated with cross-functional teams to address any issues that arose during the process. By implementing automated deployment and troubleshooting mechanisms, I was able to streamline the migration process and ensure minimal downtime, ultimately resulting in reduced operating costs and improved efficiency.
+
+4. What experience do you have with automation and scripting?
+
+Answer:
+I have extensive experience with automation and scripting. In my current role at Wimmer Solutions, I write scripts using PowerShell and Azure CLI to automate routine tasks, such as provisioning resources, configuring virtual machines, and managing backups. I also use Infrastructure as Code (IaC) tools like Terraform to automate the deployment of cloud infrastructure. In my previous role at Protiviti, I developed multiple Spark scripts through Python to ensure effective operation based on client requirements.
+
+5. How do you stay updated with the latest Azure updates and best practices?
+
+Answer:
+I stay updated with the latest Azure updates and best practices by regularly attending training sessions, webinars, and industry conferences. I also follow Azure documentation, blogs, and forums to keep abreast of new features, updates, and best practices. Additionally, I am an active member of several professional networks and communities where I can exchange knowledge and insights with other professionals in the field. This continuous learning approach ensures that I remain proficient in leveraging the latest Azure technologies and practices in my work.
+
+6. Can you discuss your experience with security measures in Azure?
+
+Answer:
+In my current role, I implement various security measures to protect Azure resources. This includes setting up Network Security Groups (NSGs), implementing Azure Policy to ensure compliance, and managing access control through role-based access control (RBAC). I also configure and manage VPN connections, such as site-to-site, point-to-site, and Vnet-to-Vnet, to secure network communications. Additionally, I set up and manage backup policies using Azure Recovery Services Vault and implement disaster recovery plans with Azure Site Recovery to ensure data protection and business continuity.
+
+7. How do you approach troubleshooting and resolving issues in Azure?
+
+Answer:
+My approach to troubleshooting and resolving issues in Azure involves several steps. First, I gather detailed information about the issue, including logs, error messages, and performance metrics, using tools like Azure Monitor, Azure Log Analytics, and Application Insights. I then analyze this data to identify the root cause of the problem. Depending on the issue, I may use PowerShell, Azure CLI, or the Azure Portal to reproduce and debug the problem. I collaborate with other team members and stakeholders as needed to resolve the issue promptly. Additionally, I document the resolution process to help prevent similar issues in the future and to improve our incident response procedures.
+
+8. Can you provide an example of a time when you improved a process or system?
+
+Answer:
+At Protiviti, I developed and implemented new processes for automating the deployment and troubleshooting of Azure services. By scripting and automating routine tasks, I was able to reduce the time required for these processes and minimize human error. This not only improved the efficiency of our operations but also ensured more consistent and reliable deployments. Additionally, I documented these processes to provide clear guidelines for other team members, further enhancing our team’s overall productivity and effectiveness.
+
+9. How have you collaborated with other teams or stakeholders in your roles?
+
+Answer:
+Collaboration with other teams and stakeholders has been a key aspect of my roles. For instance, at Asurion, I worked cross-functionally with software engineers to create exceptional post-deployment customer experiences. I also collaborated with IT staff, development teams, and other stakeholders at Wimmer Solutions to ensure the smooth operation of cloud services. This involved participating in planning and design discussions for new cloud-based projects, providing technical support, and troubleshooting issues. Effective communication and teamwork have been crucial in achieving successful outcomes in these collaborations.
+
+10. What certifications do you hold, and how do they benefit your work?
+
+Answer:
+I hold several certifications, including Microsoft Azure Fundamentals, Microsoft AZ-104, Professional Scrum Master I (PSMI), Project Management Professional (PMP), and Certified ServiceNow Administrator (CSA). These certifications demonstrate my proficiency in various aspects of Azure cloud services, project management, and agile methodologies. They provide me with a solid foundation of knowledge and best practices that I apply in my daily work. Additionally, these certifications enhance my credibility and help me stay current with the latest industry standards and advancements.

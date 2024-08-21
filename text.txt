@@ -1,166 +1,39 @@
-require('dotenv').config();
-const got = require('got');
-const soap = require('soap');
-const { Client } = require('pg');
-const cron = require('node-cron');
-const winston = require('winston');
-const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
-// Database configuration
-const dbConfig = {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT || 5432,
-};
-
-const client = new Client(dbConfig);
-
-// Winston logger configuration
-const logger = winston.createLogger({
-    level: 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)
-    ),
-    transports: [
-        new winston.transports.Console(),
-        new winston.transports.File({ filename: 'endpoint-status.log' })
-    ],
-});
-
-client.connect().catch(err => {
-    logger.error(`Failed to connect to the database: ${err.message}`);
-    process.exit(1);
-});
-
-const endpoints = [
-    { url: '/API/Ticketing/GetEvents', type: 'rest' },
-    { url: '/card/enquiry/listCard', type: 'rest' },
-    { url: '/api/ClickCredit/USSD/LoanCalculator', type: 'rest' },
-    { url: '/ussd/ghipss/fundtransfer', type: 'soap', wsdl: 'http://example.com/your_wsdl_url' },
-    // Add more endpoints as needed
-];
-
-async function checkEndpoint(endpoint) {
-    let success = 0;
-    let failed = 0;
-
-    try {
-        if (endpoint.type === 'rest') {
-            await got(endpoint.url);
-            success++;
-        } else if (endpoint.type === 'soap') {
-            const client = await soap.createClientAsync(endpoint.wsdl);
-            await client.YourSoapMethodAsync(); // Replace with actual method call
-            success++;
-        }
-    } catch (error) {
-        logger.error(`Error checking endpoint ${endpoint.url}: ${error.message}`);
-        failed++;
+// Function to validate the PIN
+function isValidPIN(pin) {
+    // Check if the PIN has any two or more consecutive repeated digits
+    const repeatedPattern = /(\d)\1/;
+    if (repeatedPattern.test(pin)) {
+        return false;
     }
 
-    return { success, failed };
-}
-
-async function reportStatuses() {
-    for (const endpoint of endpoints) {
-        try {
-            const { success, failed } = await checkEndpoint(endpoint);
-            const total = success + failed;
-            const failedPercentage = total ? (failed / total) * 100 : 0;
-
-            const query = `
-                INSERT INTO endpoint_statuses (endpoint, total, success, failed, failed_percentage, report_date)
-                VALUES ($1, $2, $3, $4, $5, CURRENT_DATE)
-                ON CONFLICT (endpoint, report_date) DO UPDATE
-                SET total = endpoint_statuses.total + $2,
-                    success = endpoint_statuses.success + $3,
-                    failed = endpoint_statuses.failed + $4,
-                    failed_percentage = (endpoint_statuses.failed + $4) * 100.0 / (endpoint_statuses.total + $2)
-            `;
-
-            await client.query(query, [endpoint.url, total, success, failed, failedPercentage]);
-
-            logger.info(`Reported status for endpoint ${endpoint.url}: total=${total}, success=${success}, failed=${failed}, failed_percentage=${failedPercentage.toFixed(2)}`);
-        } catch (error) {
-            logger.error(`Failed to report status for endpoint ${endpoint.url}: ${error.message}`);
-        }
+    // Check if the PIN has any sequential digits
+    const sequentialPattern = /012|123|234|345|456|567|678|789|890|098|987|876|765|654|543|432|321|210/;
+    if (sequentialPattern.test(pin)) {
+        return false;
     }
+
+    return true;
 }
 
-async function sendEmailReport() {
-    try {
-        const result = await client.query('SELECT * FROM endpoint_statuses WHERE report_date = CURRENT_DATE');
+// Function to hash the PIN using PBKDF2
+function hashPIN(pin, salt) {
+    const iterations = 10000;
+    const keyLength = 64;
+    const digest = 'sha256';
 
-        const rows = result.rows.map(row => `
-            <tr>
-                <td>${row.endpoint}</td>
-                <td>${row.total}</td>
-                <td>${row.success}</td>
-                <td>${row.failed}</td>
-                <td>${row.failed_percentage.toFixed(2)}</td>
-            </tr>
-        `).join('');
-
-        const html = `
-            <table border="1">
-                <tr>
-                    <th>ENDPOINT</th>
-                    <th>TOTAL</th>
-                    <th>SUCCESS</th>
-                    <th>FAILED</th>
-                    <th>FAILED %</th>
-                </tr>
-                ${rows}
-            </table>
-        `;
-
-        let transporter = nodemailer.createTransport({
-            service: 'gmail', // e.g., 'gmail'
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-            }
-        });
-
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: 'leosupportservices@ubagroup.com',
-            subject: 'Endpoint Status Report',
-            html: html,
-        });
-
-        logger.info('Email report sent successfully.');
-    } catch (error) {
-        logger.error(`Failed to send email report: ${error.message}`);
-    }
+    const hashedPIN = crypto.pbkdf2Sync(pin, salt, iterations, keyLength, digest).toString('hex');
+    return hashedPIN;
 }
 
-// Graceful shutdown
-const gracefulShutdown = async () => {
-    logger.info('Shutting down gracefully...');
-    await client.end();
-    logger.info('Database connection closed.');
-    process.exit(0);
-};
+// Example usage
+const pin = '135790'; // Example PIN
+const salt = crypto.randomBytes(16).toString('hex'); // Generate a 32-bit salt
 
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
-
-// Schedule endpoint checks every 2 minutes
-cron.schedule('*/2 * * * *', async () => {
-    logger.info('Starting endpoint status check...');
-    await reportStatuses();
-    logger.info('Completed endpoint status check.');
-});
-
-// Schedule email report every 15 minutes
-cron.schedule('*/15 * * * *', async () => {
-    logger.info('Sending email report...');
-    await sendEmailReport();
-    logger.info('Email report sent.');
-});
-
-logger.info('Endpoint status reporter is running...');
+if (isValidPIN(pin)) {
+    const hashedPIN = hashPIN(pin, salt);
+    console.log('PIN is valid and hashed:', hashedPIN);
+} else {
+    console.log('Invalid PIN. Please choose another.');
+}

@@ -1,39 +1,8 @@
-const crypto = require('crypto');
+// Function to verify the PIN during a transaction
+function verifyPIN(inputPIN, storedSalt, storedHashedPIN) {
+    // Hash the input PIN with the stored salt
+    const hashedInputPIN = hashPIN(inputPIN, storedSalt);
 
-// Function to validate the PIN
-function isValidPIN(pin) {
-    // Check if the PIN has any two or more consecutive repeated digits
-    const repeatedPattern = /(\d)\1/;
-    if (repeatedPattern.test(pin)) {
-        return false;
-    }
-
-    // Check if the PIN has any sequential digits
-    const sequentialPattern = /012|123|234|345|456|567|678|789|890|098|987|876|765|654|543|432|321|210/;
-    if (sequentialPattern.test(pin)) {
-        return false;
-    }
-
-    return true;
-}
-
-// Function to hash the PIN using PBKDF2
-function hashPIN(pin, salt) {
-    const iterations = 10000;
-    const keyLength = 64;
-    const digest = 'sha256';
-
-    const hashedPIN = crypto.pbkdf2Sync(pin, salt, iterations, keyLength, digest).toString('hex');
-    return hashedPIN;
-}
-
-// Example usage
-const pin = '135790'; // Example PIN
-const salt = crypto.randomBytes(16).toString('hex'); // Generate a 32-bit salt
-
-if (isValidPIN(pin)) {
-    const hashedPIN = hashPIN(pin, salt);
-    console.log('PIN is valid and hashed:', hashedPIN);
-} else {
-    console.log('Invalid PIN. Please choose another.');
+    // Compare the hashed input PIN with the stored hashed PIN
+    return hashedInputPIN === storedHashedPIN;
 }

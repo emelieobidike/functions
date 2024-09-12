@@ -1,31 +1,30 @@
-provider "azurerm" {
-  features {}
+# Reference the existing Event Hub Namespace and Event Hub
+data "azurerm_eventhub_namespace" "existing" {
+  name                = "existing-eventhub-namespace"
+  resource_group_name = "existing-resource-group"
 }
 
-resource "azurerm_eventhub_namespace" "example" {
-  name                = "example-eventhub-namespace"
-  location            = "East US"
-  resource_group_name = "example-resources"
-  sku                 = "Standard"
-  capacity            = 2
+data "azurerm_eventhub" "existing" {
+  name                = "existing-eventhub-name"
+  namespace_name      = data.azurerm_eventhub_namespace.existing.name
+  resource_group_name = data.azurerm_eventhub_namespace.existing.resource_group_name
 }
 
-resource "azurerm_eventhub" "example" {
-  name                = "example-eventhub"
-  namespace_name      = azurerm_eventhub_namespace.example.name
-  resource_group_name = "example-resources"
-  partition_count     = 2
-  message_retention   = 1
+data "azurerm_eventhub_authorization_rule" "existing" {
+  name                = "RootManageSharedAccessKey"
+  namespace_name      = data.azurerm_eventhub_namespace.existing.name
+  eventhub_name       = data.azurerm_eventhub.existing.name
+  resource_group_name = data.azurerm_eventhub_namespace.existing.resource_group_name
 }
 
 
 # Subscription Activity Log Diagnostic Setting
 resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
-  name               = "send-activity-logs-to-eventhub"
+  name               = "send-activity-logs-to-existing-eventhub"
   target_resource_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/providers/microsoft.insights/eventtypes/management"
   
-  eventhub_authorization_rule_id = azurerm_eventhub_authorization_rule.example.id
-  eventhub_name                  = azurerm_eventhub.example.name
+  eventhub_authorization_rule_id = data.azurerm_eventhub_authorization_rule.existing.id
+  eventhub_name                  = data.azurerm_eventhub.existing.name
 
   logs {
     category = "Administrative"
@@ -53,42 +52,10 @@ resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
   }
 }
 
-
-
-
-# Use data sources for subscription details
+# Get the current subscription details
 data "azurerm_subscription" "current" {}
 
-resource "azurerm_eventhub_authorization_rule" "example" {
-  name                = "example-rule"
-  namespace_name      = azurerm_eventhub_namespace.example.name
-  eventhub_name       = azurerm_eventhub.example.name
-  resource_group_name = "example-resources"
-  listen              = true
-  send                = true
-}
 
-variable "subscription_ids" {
-  type = list(string)
-  default = ["subscription_id_1", "subscription_id_2"]
-}
 
-resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
-  for_each           = toset(var.subscription_ids)
-  name               = "send-activity-logs-to-eventhub-${each.value}"
-  target_resource_id = "/subscriptions/${each.value}/providers/microsoft.insights/eventtypes/management"
-  
-  eventhub_authorization_rule_id = azurerm_eventhub_authorization_rule.example.id
-  eventhub_name                  = azurerm_eventhub.example.name
 
-  logs {
-    category = "Administrative"
-    enabled  = true
-  }
-
-  logs {
-    category = "Security"
-    enabled  = true
-  }
-}
 

@@ -1,8 +1,94 @@
-# Fetch the current Application Gateway configuration
-$appGateway = Get-AzApplicationGateway -ResourceGroupName <ResourceGroupName> -Name <ApplicationGatewayName>
+provider "azurerm" {
+  features {}
+}
 
-# Configure the SSL Policy to enforce TLS 1.2
-$sslPolicy = New-AzApplicationGatewaySslPolicy -PolicyType Custom -MinProtocolVersion TLSv1_2 -CipherSuite "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+resource "azurerm_eventhub_namespace" "example" {
+  name                = "example-eventhub-namespace"
+  location            = "East US"
+  resource_group_name = "example-resources"
+  sku                 = "Standard"
+  capacity            = 2
+}
 
-# Apply the SSL Policy to the Application Gateway
-Set-AzApplicationGateway -ApplicationGateway $appGateway -SslPolicy $sslPolicy
+resource "azurerm_eventhub" "example" {
+  name                = "example-eventhub"
+  namespace_name      = azurerm_eventhub_namespace.example.name
+  resource_group_name = "example-resources"
+  partition_count     = 2
+  message_retention   = 1
+}
+
+
+# Subscription Activity Log Diagnostic Setting
+resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
+  name               = "send-activity-logs-to-eventhub"
+  target_resource_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/providers/microsoft.insights/eventtypes/management"
+  
+  eventhub_authorization_rule_id = azurerm_eventhub_authorization_rule.example.id
+  eventhub_name                  = azurerm_eventhub.example.name
+
+  logs {
+    category = "Administrative"
+    enabled  = true
+  }
+
+  logs {
+    category = "ServiceHealth"
+    enabled  = true
+  }
+
+  logs {
+    category = "Security"
+    enabled  = true
+  }
+
+  logs {
+    category = "Alert"
+    enabled  = true
+  }
+
+  logs {
+    category = "Recommendation"
+    enabled  = true
+  }
+}
+
+
+
+
+# Use data sources for subscription details
+data "azurerm_subscription" "current" {}
+
+resource "azurerm_eventhub_authorization_rule" "example" {
+  name                = "example-rule"
+  namespace_name      = azurerm_eventhub_namespace.example.name
+  eventhub_name       = azurerm_eventhub.example.name
+  resource_group_name = "example-resources"
+  listen              = true
+  send                = true
+}
+
+variable "subscription_ids" {
+  type = list(string)
+  default = ["subscription_id_1", "subscription_id_2"]
+}
+
+resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
+  for_each           = toset(var.subscription_ids)
+  name               = "send-activity-logs-to-eventhub-${each.value}"
+  target_resource_id = "/subscriptions/${each.value}/providers/microsoft.insights/eventtypes/management"
+  
+  eventhub_authorization_rule_id = azurerm_eventhub_authorization_rule.example.id
+  eventhub_name                  = azurerm_eventhub.example.name
+
+  logs {
+    category = "Administrative"
+    enabled  = true
+  }
+
+  logs {
+    category = "Security"
+    enabled  = true
+  }
+}
+

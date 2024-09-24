@@ -1,61 +1,112 @@
-# Reference the existing Event Hub Namespace and Event Hub
-data "azurerm_eventhub_namespace" "existing" {
-  name                = "existing-eventhub-namespace"
-  resource_group_name = "existing-resource-group"
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const fs = require('fs');
+const path = require('path');
+
+async function createPDF() {
+  // Create a new PDF Document
+  const pdfDoc = await PDFDocument.create();
+
+  // Add a blank page
+  const page = pdfDoc.addPage([600, 400]);
+
+  // Load the UBA logo from the filesystem
+  const logoPath = path.join(__dirname, 'uba_logo.jpeg'); // Adjust the filename as per your image path
+  const logoImage = fs.readFileSync(logoPath);
+  const logo = await pdfDoc.embedJpg(logoImage);
+
+  // Draw the UBA logo on the page
+  const logoDims = logo.scale(0.2); // Scale the image
+  page.drawImage(logo, {
+    x: 450,
+    y: 340,
+    width: logoDims.width,
+    height: logoDims.height,
+  });
+
+  // Add Title (Releve d'Identite Bancaire)
+  const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  page.drawText('RELEVE D\'IDENTITE BANCAIRE (RIB)', {
+    x: 180,
+    y: 340,
+    size: 12,
+    font: timesRomanFont,
+    color: rgb(0, 0, 0),
+  });
+
+  // Add the account holder's name
+  page.drawText('ANJACO OLIVIER JEAN JACQUES OU ABOUA AKE CHRISTELL', {
+    x: 50,
+    y: 300,
+    size: 10,
+    font: timesRomanFont,
+    color: rgb(0, 0, 0),
+  });
+
+  // Add the Address placeholder
+  page.drawText('ADDRESS LINE1', {
+    x: 50,
+    y: 280,
+    size: 10,
+    font: timesRomanFont,
+    color: rgb(0, 0, 0),
+  });
+
+  // Add Bank information labels
+  const labels = [
+    { label: 'Code banque', value: 'CI150', x: 50, y: 250 },
+    { label: 'Code guichet', value: '01002', x: 150, y: 250 },
+    { label: 'Numéro de compte', value: '102500085294', x: 250, y: 250 },
+    { label: 'Clé RIB', value: '42', x: 450, y: 250 },
+    { label: 'IBAN', value: 'CI93CI1500100210250008529442', x: 50, y: 220 },
+    { label: 'UBA SWIFT', value: 'UNAFCIAB', x: 50, y: 190 },
+  ];
+
+  labels.forEach(item => {
+    page.drawText(item.label, {
+      x: item.x,
+      y: item.y,
+      size: 10,
+      font: timesRomanFont,
+      color: rgb(0, 0, 0),
+    });
+
+    page.drawText(item.value, {
+      x: item.x + 80,
+      y: item.y,
+      size: 10,
+      font: timesRomanFont,
+      color: rgb(0, 0, 0),
+    });
+  });
+
+  // Add the Domiciliation section on the right
+  const domiciliationInfo = [
+    'Domiciliation',
+    'AGENCE DE TREICHVILLE',
+    'IMM. LA BALANCE',
+    '17 BP 808 ABIDJAN 17',
+    'TEL: 21 75 91 11',
+  ];
+
+  domiciliationInfo.forEach((text, index) => {
+    page.drawText(text, {
+      x: 400,
+      y: 220 - index * 20,
+      size: 10,
+      font: timesRomanFont,
+      color: rgb(0, 0, 0),
+    });
+  });
+
+  // Serialize the PDFDocument to bytes (a Uint8Array)
+  const pdfBytes = await pdfDoc.save();
+
+  // Write the PDF to a file
+  fs.writeFileSync('rib_document.pdf', pdfBytes);
+
+  console.log('PDF generated successfully!');
 }
 
-data "azurerm_eventhub" "existing" {
-  name                = "existing-eventhub-name"
-  namespace_name      = data.azurerm_eventhub_namespace.existing.name
-  resource_group_name = data.azurerm_eventhub_namespace.existing.resource_group_name
-}
-
-data "azurerm_eventhub_authorization_rule" "existing" {
-  name                = "RootManageSharedAccessKey"
-  namespace_name      = data.azurerm_eventhub_namespace.existing.name
-  eventhub_name       = data.azurerm_eventhub.existing.name
-  resource_group_name = data.azurerm_eventhub_namespace.existing.resource_group_name
-}
-
-
-# Subscription Activity Log Diagnostic Setting
-resource "azurerm_monitor_diagnostic_setting" "activity_logs" {
-  name               = "send-activity-logs-to-existing-eventhub"
-  target_resource_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/providers/microsoft.insights/eventtypes/management"
-  
-  eventhub_authorization_rule_id = data.azurerm_eventhub_authorization_rule.existing.id
-  eventhub_name                  = data.azurerm_eventhub.existing.name
-
-  logs {
-    category = "Administrative"
-    enabled  = true
-  }
-
-  logs {
-    category = "ServiceHealth"
-    enabled  = true
-  }
-
-  logs {
-    category = "Security"
-    enabled  = true
-  }
-
-  logs {
-    category = "Alert"
-    enabled  = true
-  }
-
-  logs {
-    category = "Recommendation"
-    enabled  = true
-  }
-}
-
-# Get the current subscription details
-data "azurerm_subscription" "current" {}
-
-
-
-
-
+createPDF().catch((err) => {
+  console.error('Error creating PDF:', err);
+});

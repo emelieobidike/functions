@@ -1,39 +1,65 @@
+param($Timer)
+
+Connect-AzAccount -Identity
+
+function Main() {
+    $storageAccounts = @(
+        "zw2isdevinfstadiag01",
+        "zw2isprdinfstadiag01",
+        "zw2isprdinfstadiag02",
+        "zw2issbxinfstadiag01",
+        "zw2tldevinfstadiag01",
+        "zw2tlprdinfstadiag01",
+        "zw2wpdevinfstadiag01",
+        "zw2wpprdinfstadiag01"
+    )
+
+    foreach ($storageAccount in $storageAccounts) {
+        $context = Get-StorageContext $storageAccount
+        Write-Host "Working on" $storageAccount
+        Remove-TableRows $context 
+    }
+}
+
+function Get-StorageContext($storageAccount) {
+    $token = Get-AzKeyVaultSecret -VaultName "prunner-keyvault-prd" -Name $storageAccount -AsPlainText
+    return New-AzStorageContext -StorageAccountName $storageAccount -SasToken $token
+}
+
 function Remove-TableRows($context) {
     $tables = Get-AzStorageTable -Context $context
     $Days = 365
     $Date = (Get-Date).AddDays(-$Days)
+
     foreach ($table in $tables) {
         Write-Host "Working on table" $table.Name
         $storageTable = Get-AzStorageTable -Name $table.Name -Context $context
-        $TableName = $table.Name
 
-        # Generate filter condition based on Timestamp property
+        # Create the query with a filter for entities older than the specified number of days
+        $TableQuery = New-Object Microsoft.Azure.Cosmos.Table.TableQuery
         $Filter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterConditionForDate("Timestamp", "lt", $Date)
+        $TableQuery.FilterString = $Filter
 
-        # Use a continuation token to process rows in batches
+        # Initialize continuation token
         $ContinuationToken = $null
-        $BatchSize = 1000 # Adjust the batch size if needed
 
         do {
-            # Query a batch of entities from the table
-            $Query = New-AzTableQuery -Context $context -Filter $Filter -MaxResult $BatchSize
-            $Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter -ContinuationToken $ContinuationToken
+            # Execute query in segmented manner using continuation token
+            $ResultSegment = $storageTable.CloudTable.ExecuteQuerySegmentedAsync($TableQuery, $ContinuationToken).Result
 
-            # Get the continuation token to process the next batch
-            $ContinuationToken = $Entities.ContinuationToken
+            # Update continuation token to get the next batch of results
+            $ContinuationToken = $ResultSegment.ContinuationToken
 
-            # Get the total number of entities in the batch
-            $BatchCount = $Entities.Count
-            Write-Host "$BatchCount entities retrieved from $TableName"
-
-            # Loop through the entities and delete them one by one
-            foreach ($Entity in $Entities) {
-                Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
+            # Process each entity in the batch
+            foreach ($Entity in $ResultSegment.Results) {
+                Write-Host "Deleting entity from table $table.Name"
+                $storageTable.CloudTable.ExecuteAsync([Microsoft.Azure.Cosmos.Table.TableOperation]::Delete($Entity)).Wait()
             }
 
-            Write-Host "Deleted $BatchCount entities from $TableName"
         } while ($ContinuationToken -ne $null) # Continue until all rows are processed
 
-        Write-Host "All entities older than $Days days have been deleted from $TableName"
+        Write-Host "All entities older than $Days days have been deleted from $table.Name"
     }
 }
+
+Main

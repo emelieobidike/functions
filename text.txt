@@ -1,112 +1,71 @@
-const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
-const fs = require('fs');
-const path = require('path');
+param($Timer)
 
-async function createPDF() {
-  // Create a new PDF Document
-  const pdfDoc = await PDFDocument.create();
+Connect-AzAccount -Identity
 
-  // Add a blank page
-  const page = pdfDoc.addPage([600, 400]);
+function Main() {
+    $storageAccounts = @(
+        "zw2isdevinfstadiag01",
+        "zw2isprdinfstadiag01",
+        "zw2isprdinfstadiag02",
+        "zw2issbxinfstadiag01",
+        "zw2tldevinfstadiag01",
+        "zw2tlprdinfstadiag01",
+        "zw2wpdevinfstadiag01",
+        "zw2wpprdinfstadiag01"
+    )
 
-  // Load the UBA logo from the filesystem
-  const logoPath = path.join(__dirname, 'uba_logo.jpeg'); // Adjust the filename as per your image path
-  const logoImage = fs.readFileSync(logoPath);
-  const logo = await pdfDoc.embedJpg(logoImage);
+    foreach ($storageAccount in $storageAccounts) {
+        $context = Get-StorageContext $storageAccount
+        Write-Host "Working on" $storageAccount
+        Remove-TableRows $context 
+    }
 
-  // Draw the UBA logo on the page
-  const logoDims = logo.scale(0.2); // Scale the image
-  page.drawImage(logo, {
-    x: 450,
-    y: 340,
-    width: logoDims.width,
-    height: logoDims.height,
-  });
-
-  // Add Title (Releve d'Identite Bancaire)
-  const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-  page.drawText('RELEVE D\'IDENTITE BANCAIRE (RIB)', {
-    x: 180,
-    y: 340,
-    size: 12,
-    font: timesRomanFont,
-    color: rgb(0, 0, 0),
-  });
-
-  // Add the account holder's name
-  page.drawText('ANJACO OLIVIER JEAN JACQUES OU ABOUA AKE CHRISTELL', {
-    x: 50,
-    y: 300,
-    size: 10,
-    font: timesRomanFont,
-    color: rgb(0, 0, 0),
-  });
-
-  // Add the Address placeholder
-  page.drawText('ADDRESS LINE1', {
-    x: 50,
-    y: 280,
-    size: 10,
-    font: timesRomanFont,
-    color: rgb(0, 0, 0),
-  });
-
-  // Add Bank information labels
-  const labels = [
-    { label: 'Code banque', value: 'CI150', x: 50, y: 250 },
-    { label: 'Code guichet', value: '01002', x: 150, y: 250 },
-    { label: 'Numéro de compte', value: '102500085294', x: 250, y: 250 },
-    { label: 'Clé RIB', value: '42', x: 450, y: 250 },
-    { label: 'IBAN', value: 'CI93CI1500100210250008529442', x: 50, y: 220 },
-    { label: 'UBA SWIFT', value: 'UNAFCIAB', x: 50, y: 190 },
-  ];
-
-  labels.forEach(item => {
-    page.drawText(item.label, {
-      x: item.x,
-      y: item.y,
-      size: 10,
-      font: timesRomanFont,
-      color: rgb(0, 0, 0),
-    });
-
-    page.drawText(item.value, {
-      x: item.x + 80,
-      y: item.y,
-      size: 10,
-      font: timesRomanFont,
-      color: rgb(0, 0, 0),
-    });
-  });
-
-  // Add the Domiciliation section on the right
-  const domiciliationInfo = [
-    'Domiciliation',
-    'AGENCE DE TREICHVILLE',
-    'IMM. LA BALANCE',
-    '17 BP 808 ABIDJAN 17',
-    'TEL: 21 75 91 11',
-  ];
-
-  domiciliationInfo.forEach((text, index) => {
-    page.drawText(text, {
-      x: 400,
-      y: 220 - index * 20,
-      size: 10,
-      font: timesRomanFont,
-      color: rgb(0, 0, 0),
-    });
-  });
-
-  // Serialize the PDFDocument to bytes (a Uint8Array)
-  const pdfBytes = await pdfDoc.save();
-
-  // Write the PDF to a file
-  fs.writeFileSync('rib_document.pdf', pdfBytes);
-
-  console.log('PDF generated successfully!');
 }
 
-createPDF().catch((err) => {
-  console.error('Error creating PDF:', err);
-});
+function Get-StorageContext($storageAccount) {
+    $token = Get-AzKeyVaultSecret -VaultName "prunner-keyvault-prd" -Name $storageAccount -AsPlainText
+    return New-AzStorageContext -StorageAccountName $storageAccount -SasToken $token
+}
+
+function Remove-TableRows($context) {
+    $tables = Get-AzStorageTable -Context $context
+    $Days = 365
+    $Date = (Get-Date).AddDays(-$Days)
+    foreach ($table in $tables) {
+        Write-Host "Working on table" $table.Name
+        $storageTable = Get-AzStorageTable -Name $table.Name -Context $context
+        $TableName = $table.Name
+        # Generate filter condition based on Timestamp property
+        $Filter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterConditionForDate("Timestamp", "lt", $Date)
+
+        # Query the table for entities older than the specified number of days
+        $Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter
+
+        # Get the total number of entities to delete
+        $Total = $Entities.Count
+
+        # Initialize a counter for deleted entities
+        $Deleted = 0
+
+        # Loop through the entities and delete them one by one
+        foreach ($Entity in $Entities) {
+
+            # Delete the entity from the table
+            Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
+
+            # Increment the counter
+            $Deleted++
+
+            # Calculate the percentage of completion
+            $Percent = ($Deleted / $Total) * 100
+
+            # Write the progress to the console
+            Write-Progress -Activity "Deleting entities from $TableName" -Status "$Deleted of $Total entities deleted ($Percent %)" -PercentComplete $Percent
+        }
+
+        # Write the final result to the console
+        Write-Host "All $Total entities older than $Days days have been deleted from $TableName"
+    }
+}
+
+Main

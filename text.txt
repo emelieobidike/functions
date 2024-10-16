@@ -1,32 +1,3 @@
-param($Timer)
-
-Connect-AzAccount -Identity
-
-function Main() {
-    $storageAccounts = @(
-        "zw2isdevinfstadiag01",
-        "zw2isprdinfstadiag01",
-        "zw2isprdinfstadiag02",
-        "zw2issbxinfstadiag01",
-        "zw2tldevinfstadiag01",
-        "zw2tlprdinfstadiag01",
-        "zw2wpdevinfstadiag01",
-        "zw2wpprdinfstadiag01"
-    )
-
-    foreach ($storageAccount in $storageAccounts) {
-        $context = Get-StorageContext $storageAccount
-        Write-Host "Working on" $storageAccount
-        Remove-TableRows $context 
-    }
-
-}
-
-function Get-StorageContext($storageAccount) {
-    $token = Get-AzKeyVaultSecret -VaultName "prunner-keyvault-prd" -Name $storageAccount -AsPlainText
-    return New-AzStorageContext -StorageAccountName $storageAccount -SasToken $token
-}
-
 function Remove-TableRows($context) {
     $tables = Get-AzStorageTable -Context $context
     $Days = 365
@@ -35,37 +6,34 @@ function Remove-TableRows($context) {
         Write-Host "Working on table" $table.Name
         $storageTable = Get-AzStorageTable -Name $table.Name -Context $context
         $TableName = $table.Name
+
         # Generate filter condition based on Timestamp property
         $Filter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterConditionForDate("Timestamp", "lt", $Date)
 
-        # Query the table for entities older than the specified number of days
-        $Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter
+        # Use a continuation token to process rows in batches
+        $ContinuationToken = $null
+        $BatchSize = 1000 # Adjust the batch size if needed
 
-        # Get the total number of entities to delete
-        $Total = $Entities.Count
+        do {
+            # Query a batch of entities from the table
+            $Query = New-AzTableQuery -Context $context -Filter $Filter -MaxResult $BatchSize
+            $Entities = Get-AzTableRow -table $storageTable.CloudTable -customFilter $Filter -ContinuationToken $ContinuationToken
 
-        # Initialize a counter for deleted entities
-        $Deleted = 0
+            # Get the continuation token to process the next batch
+            $ContinuationToken = $Entities.ContinuationToken
 
-        # Loop through the entities and delete them one by one
-        foreach ($Entity in $Entities) {
+            # Get the total number of entities in the batch
+            $BatchCount = $Entities.Count
+            Write-Host "$BatchCount entities retrieved from $TableName"
 
-            # Delete the entity from the table
-            Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
+            # Loop through the entities and delete them one by one
+            foreach ($Entity in $Entities) {
+                Remove-AzTableRow -table $storageTable.CloudTable -entity $Entity
+            }
 
-            # Increment the counter
-            $Deleted++
+            Write-Host "Deleted $BatchCount entities from $TableName"
+        } while ($ContinuationToken -ne $null) # Continue until all rows are processed
 
-            # Calculate the percentage of completion
-            $Percent = ($Deleted / $Total) * 100
-
-            # Write the progress to the console
-            Write-Progress -Activity "Deleting entities from $TableName" -Status "$Deleted of $Total entities deleted ($Percent %)" -PercentComplete $Percent
-        }
-
-        # Write the final result to the console
-        Write-Host "All $Total entities older than $Days days have been deleted from $TableName"
+        Write-Host "All entities older than $Days days have been deleted from $TableName"
     }
 }
-
-Main

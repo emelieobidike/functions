@@ -1,37 +1,24 @@
-# Search Query
 index=azure sourcetype="azure:aad:audit" 
-    (operationName="Disable account" OR operationName="Update user" result.accountEnabled=false) 
-    | eval timestamp=strftime(_time, "%Y-%m-%d %H:%M:%S")
-    | eval targetUserPrincipalName=coalesce(targetResources{}.userPrincipalName, target.userPrincipalName)
-    | eval initiatedBy=coalesce(initiatedBy.user.userPrincipalName, initiatedBy.app.displayName, "System")
-    | stats 
-        latest(timestamp) as last_modified,
-        values(initiatedBy) as modified_by,
-        values(result.accountEnabled) as account_status
-        by targetUserPrincipalName
-    | where account_status="false"
-    | rename 
-        targetUserPrincipalName as "User",
-        last_modified as "Last Modified",
-        modified_by as "Modified By"
-    | sort - "Last Modified"
-
-# Alert Settings:
-# Schedule: 0 14 * * * (Runs daily at 2 PM)
-# Alert Type: Scheduled
-# Alert Conditions:
-#   - Is greater than 0 events
-# Trigger Actions:
-#   - Send email
-#   - Add to notable events
-# Trigger Conditions:
-#   - Trigger on custom condition
-#   - Result count > 0
-
-# Email Template:
-Subject: [Alert] Disabled Azure AD Accounts Detected
-Description: The following Azure AD accounts have been detected as disabled in the last 24 hours:
-
-$result.User$ was disabled on $result.Last_Modified$ by $result.Modified_By$
-
-Total accounts affected: $resultCount$
+(operationName="Disable account" OR (operationName="Update user" AND result.accountEnabled=false))
+| eval timestamp=strftime(_time, "%Y-%m-%d %H:%M:%S")
+| eval targetUserPrincipalName=case(
+    isnotnull(targetResources{}.userPrincipalName), targetResources{}.userPrincipalName,
+    isnotnull(target.userPrincipalName), target.userPrincipalName,
+    1=1, "Unknown"
+)
+| eval initiatedBy=case(
+    isnotnull(initiatedBy.user.userPrincipalName), initiatedBy.user.userPrincipalName,
+    isnotnull(initiatedBy.app.displayName), initiatedBy.app.displayName,
+    1=1, "System"
+)
+| stats 
+    latest(timestamp) as last_modified,
+    values(initiatedBy) as modified_by,
+    values(result.accountEnabled) as account_status
+    by targetUserPrincipalName
+| where account_status="false"
+| rename 
+    targetUserPrincipalName as "User",
+    last_modified as "Last Modified",
+    modified_by as "Modified By"
+| sort - "Last Modified"

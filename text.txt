@@ -1,24 +1,29 @@
-index=azure sourcetype="azure:aad:audit" 
-(operationName="Disable account" OR (operationName="Update user" AND result.accountEnabled=false))
-| eval timestamp=strftime(_time, "%Y-%m-%d %H:%M:%S")
-| eval targetUserPrincipalName=case(
-    isnotnull(targetResources{}.userPrincipalName), targetResources{}.userPrincipalName,
-    isnotnull(target.userPrincipalName), target.userPrincipalName,
-    1=1, "Unknown"
-)
-| eval initiatedBy=case(
-    isnotnull(initiatedBy.user.userPrincipalName), initiatedBy.user.userPrincipalName,
-    isnotnull(initiatedBy.app.displayName), initiatedBy.app.displayName,
-    1=1, "System"
-)
-| stats 
-    latest(timestamp) as last_modified,
-    values(initiatedBy) as modified_by,
-    values(result.accountEnabled) as account_status
-    by targetUserPrincipalName
-| where account_status="false"
-| rename 
-    targetUserPrincipalName as "User",
-    last_modified as "Last Modified",
-    modified_by as "Modified By"
-| sort - "Last Modified"
+# Install and Import AzureAD module if not already installed
+Install-Module -Name AzureAD
+Import-Module AzureAD
+
+# Login to Azure AD
+Connect-AzureAD
+
+# Get all the groups that have role assignments
+$groups = Get-AzRoleAssignment | Where-Object { $_.ObjectType -eq 'Group' } | Select-Object -Unique DisplayName
+
+# Loop through each group and get the disabled user accounts
+foreach ($group in $groups) {
+    # Get the group by display name
+    $azureADGroup = Get-AzureADGroup -SearchString $group.DisplayName
+    
+    # Get members of the group
+    $groupMembers = Get-AzureADGroupMember -ObjectId $azureADGroup.ObjectId
+    
+    # Filter disabled user accounts
+    foreach ($member in $groupMembers) {
+        if ($member.ObjectType -eq 'User') {
+            $user = Get-AzureADUser -ObjectId $member.ObjectId
+            if ($user.AccountEnabled -eq $false) {
+                # Output the disabled user account
+                $user | Select-Object DisplayName, UserPrincipalName, AccountEnabled
+            }
+        }
+    }
+}

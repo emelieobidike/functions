@@ -1,29 +1,3 @@
-# Install and Import AzureAD module if not already installed
-Install-Module -Name AzureAD
-Import-Module AzureAD
-
-# Login to Azure AD
-Connect-AzureAD
-
-# Get all the groups that have role assignments
-$groups = Get-AzRoleAssignment | Where-Object { $_.ObjectType -eq 'Group' } | Select-Object -Unique DisplayName
-
-# Loop through each group and get the disabled user accounts
-foreach ($group in $groups) {
-    # Get the group by display name
-    $azureADGroup = Get-AzureADGroup -SearchString $group.DisplayName
-    
-    # Get members of the group
-    $groupMembers = Get-AzureADGroupMember -ObjectId $azureADGroup.ObjectId
-    
-    # Filter disabled user accounts
-    foreach ($member in $groupMembers) {
-        if ($member.ObjectType -eq 'User') {
-            $user = Get-AzureADUser -ObjectId $member.ObjectId
-            if ($user.AccountEnabled -eq $false) {
-                # Output the disabled user account
-                $user | Select-Object DisplayName, UserPrincipalName, AccountEnabled
-            }
-        }
-    }
-}
+index=azuread sourcetype="azure:aad:user" earliest=-12h accountEnabled=false
+| search [| makeresults | eval group_list="Group1,Group2,Group3" | makemv delim="," group_list | mvexpand group_list | eval search="\""+group_list+"\"" | fields search]
+| where mvfilter(memberOf == search)

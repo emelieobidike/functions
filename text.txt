@@ -1,11 +1,2 @@
-| inputlookup target_groups.csv 
-| fields group_name 
-| join type=inner group_name [ 
-    search index=azuread sourcetype="azure:aad:user" earliest=-12h accountEnabled=false 
-    | mvexpand group_names 
-    | rename group_names as group_name 
-    | table name, principal_id, group_name 
-] 
-| eval last_updated=strftime(now(), "%Y-%m-%d %H:%M:%S") 
-| stats values(group_name) as groups by name, principal_id, last_updated 
-| table name, principal_id, groups, last_updated
+index=azuread sourcetype="azure:aad:user" earliest=-12h accountEnabled=false 
+| join type=left userId [ search index=azuread sourcetype="azure:aad:group" ]

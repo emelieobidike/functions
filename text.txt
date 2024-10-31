@@ -1,2 +1,4 @@
-index="corpad" "userAccountControl{}"=ACCOUNTDISABLE source=msadcorpusers earliest=-12h 
-[ | inputlookup role_assigned_aad_groups | fields GroupName | rename GroupName as "memberOf{}" | format ]
+| inputlookup role_assigned_aad_groups 
+| fields GroupName 
+| rename GroupName as "memberOf{}" 
+| map search="search index=\"corpad\" \"userAccountControl{}\"=ACCOUNTDISABLE source=msadcorpusers earliest=-12h \"memberOf{}\"=\"$memberOf{}$\""

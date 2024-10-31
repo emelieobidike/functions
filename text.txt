@@ -1,13 +1,55 @@
-const response = await got.post(`${process.env.NGA_TIER1_ACCOUNT_OPENING_URL}/esb/actimize/acct-opening-risk-factors`, {
-                headers: {
-                    "content-type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: {
-                    tranType, 
-                    countryCode
-                },
-                timeout: 60000,
-                json: true,
-                rejectUnauthorized: false
-            });
+async function fetchAllPages() {
+  const apiUrl = `${process.env.NGA_TIER1_ACCOUNT_OPENING_URL}/esb/actimize/acct-opening-risk-factors`;
+  let currentPage = 1;
+  const allItems = [];
+  let totalPages;
+  const token = 'YOUR_ACCESS_TOKEN'; // Replace this with actual token
+
+  while (true) {
+    try {
+      const response = await got.post(apiUrl, {
+        headers: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        json: {
+          tranType: 'YOUR_TRAN_TYPE', // Replace with your actual tranType
+          countryCode: 'YOUR_COUNTRY_CODE', // Replace with your actual countryCode
+          pageNumber: currentPage,
+          pageLimit: 10
+        },
+        timeout: 60000,
+        responseType: 'json',
+        https: { rejectUnauthorized: false }
+      });
+
+      const { pageInfo, items } = response.body.data;
+
+      // Add the items to the allItems array
+      allItems.push(...items);
+
+      // Calculate total pages on the first response
+      if (!totalPages) {
+        totalPages = Math.ceil(pageInfo.totalItems / pageInfo.pageLimit);
+      }
+
+      // Check if we've reached the last page
+      if (currentPage >= totalPages) {
+        break;
+      }
+
+      // Move to the next page
+      currentPage += 1;
+    } catch (error) {
+      console.error(`Error fetching page ${currentPage}:`, error.message);
+      break;
+    }
+  }
+
+  return allItems;
+}
+
+(async () => {
+  const items = await fetchAllPages();
+  console.log('Fetched items:', items);
+})();

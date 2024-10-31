@@ -1,3 +1,13 @@
-index=azuread sourcetype="azure:aad:user" earliest=-12h accountEnabled=false
-| search [| makeresults | eval group_list="Group1,Group2,Group3" | makemv delim="," group_list | mvexpand group_list | eval search="memberOf=\""+group_list+"\"" | fields search]
-| where mvfind(memberOf, "(Group1|Group2|Group3)") >= 0
+const response = await got.post(`${process.env.NGA_TIER1_ACCOUNT_OPENING_URL}/esb/actimize/acct-opening-risk-factors`, {
+                headers: {
+                    "content-type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: {
+                    tranType, 
+                    countryCode
+                },
+                timeout: 60000,
+                json: true,
+                rejectUnauthorized: false
+            });

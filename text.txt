@@ -1,53 +1,21 @@
-| inputlookup role_assigned_aad_groups 
-| fields GroupName 
-| map search="search index=\"corpad\" \"userAccountControl{}\"=ACCOUNTDISABLE source=msadcorpusers earliest=-1mon \"memberOf{}\"=\"$GroupName$\" | table name userPrincipalName $GroupName$"
+# Create a saved search to capture the processed accounts
+| inputlookup disable_ad_accounts_processed
+| fields name, userPrincipalName
+| rename name as name, userPrincipalName as userPrincipalName
 
+# Run the main search, joining with the processed accounts lookup
+| inputlookup role_assigned_aad_groups
+| fields GroupName
+| eval team = "IS-CLOUD-AZURE"
+| eval description = "Splunk Test Alert"
+| map maxsearches=1000 search="search index=\"corpad\" \"userAccountControl{}\"=ACCOUNTDISABLE source=msadcorpusers earliest=-12h \"memberOf{}\"=\"*$GroupName$*\"
+| eval GroupName=\"$GroupName$\", team=\"$team$\", description=\"$description$\"
+| table name userPrincipalName GroupName team description"
+| stats values(GroupName) as groups, values(team) as team, values(description) as description by name, userPrincipalName
+| left join type=left name, userPrincipalName [
+  | inputlookup disable_ad_accounts_processed
+]
+| where isnull(name) OR isnull(userPrincipalName)
 
-You're right - in Splunk's email alert action, you don't directly modify the search query. Instead, you can format the results as a table directly in the email body field using Splunk's built-in tokens and formatting.
-
-Here's how to set it up in the email alert action:
-
-1. Go to your alert's "Edit Actions" -> "Email"
-2. In the "Message" field (email body), use this format:
-
-```html
-<html>
-<body>
-<h3>Disabled Users in Azure AD Groups Alert</h3>
-<p>The following users have been found disabled in Azure AD:</p>
-
-<table border="1" cellpadding="5" style="border-collapse: collapse;">
-    <tr style="background-color: #f2f2f2;">
-        <th>Name</th>
-        <th>User Principal Name</th>
-        <th>Groups</th>
-        <th>Team</th>
-        <th>Description</th>
-    </tr>
-    $name::.list::
-    <tr>
-        <td>$name$</td>
-        <td>$userPrincipalName$</td>
-        <td>$groups$</td>
-        <td>$team$</td>
-        <td>$description$</td>
-    </tr>
-    $name$
-</table>
-
-<p>Please review these users and take appropriate action.</p>
-</body>
-</html>
-```
-
-Key points:
-- The `$fieldname::.list::` syntax tells Splunk to iterate through all results
-- Each field from your search (name, userPrincipalName, groups, team, description) is referenced using `$fieldname$`
-- The HTML table formatting will make the email look clean and professional
-
-Make sure to:
-1. Check "Include results" in the email action settings
-2. Set "Include results as" to "Custom" 
-3. Set "Format" to "HTML"
-
-This will use the results from your original search and format them as a table in the email.​​​​​​​​​​​​​​​​
+# Save the new accounts to the lookup file
+| outputlookup disable_ad_accounts_processed append=true name, userPrincipalName

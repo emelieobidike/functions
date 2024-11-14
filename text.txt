@@ -1,21 +1,4 @@
-# Create a saved search to capture the processed accounts
-| inputlookup disable_ad_accounts_processed
-| fields name, userPrincipalName
-| rename name as name, userPrincipalName as userPrincipalName
-
-# Run the main search, joining with the processed accounts lookup
-| inputlookup role_assigned_aad_groups
-| fields GroupName
-| eval team = "IS-CLOUD-AZURE"
-| eval description = "Splunk Test Alert"
-| map maxsearches=1000 search="search index=\"corpad\" \"userAccountControl{}\"=ACCOUNTDISABLE source=msadcorpusers earliest=-12h \"memberOf{}\"=\"*$GroupName$*\"
-| eval GroupName=\"$GroupName$\", team=\"$team$\", description=\"$description$\"
-| table name userPrincipalName GroupName team description"
-| stats values(GroupName) as groups, values(team) as team, values(description) as description by name, userPrincipalName
-| left join type=left name, userPrincipalName [
-  | inputlookup disable_ad_accounts_processed
-]
-| where isnull(name) OR isnull(userPrincipalName)
-
-# Save the new accounts to the lookup file
-| outputlookup disable_ad_accounts_processed append=true name, userPrincipalName
+| eval html_table = "<table border='1'><tr><th>Name</th><th>User Principal Name</th><th>Groups</th><th>Team</th><th>Description</th></tr>" 
+| eval html_table = html_table + mvmap(name, "<tr><td>" . name . "</td><td>" . userPrincipalName . "</td><td>" . mvjoin(groups, ", ") . "</td><td>" . mvjoin(team, ", ") . "</td><td>" . mvjoin(description, ", ") . "</td></tr>") 
+| eval html_table = html_table . "</table>"
+| fields html_table

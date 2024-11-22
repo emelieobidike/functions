@@ -1,4 +1,30 @@
-| eval html_table = "<table border='1'><tr><th>Name</th><th>User Principal Name</th><th>Groups</th><th>Team</th><th>Description</th></tr>" 
-| eval html_table = html_table + mvmap(name, "<tr><td>" . name . "</td><td>" . userPrincipalName . "</td><td>" . mvjoin(groups, ", ") . "</td><td>" . mvjoin(team, ", ") . "</td><td>" . mvjoin(description, ", ") . "</td></tr>") 
-| eval html_table = html_table . "</table>"
-| fields html_table
+{
+  "properties": {
+    "displayName": "Enforce FTPS only for Web Apps",
+    "policyType": "Custom",
+    "mode": "Indexed",
+    "description": "This policy ensures that all App Services enforce FTPS only.",
+    "metadata": {
+      "version": "1.0.0",
+      "category": "App Service"
+    },
+    "parameters": {},
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.Web/sites"
+          },
+          {
+            "field": "Microsoft.Web/sites/ftpState",
+            "notEquals": "FtpsOnly"
+          }
+        ]
+      },
+      "then": {
+        "effect": "Deny"
+      }
+    }
+  }
+}

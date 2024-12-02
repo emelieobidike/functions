@@ -1,33 +1,7 @@
-{
-    "mode": "All",
-    "policyRule": {
-        "if": {
-            "allOf": [
-                {
-                    "field": "type",
-                    "equals": "Microsoft.Web/sites"
-                },
-                {
-                    "field": "kind",
-                    "contains": "app"
-                },
-                {
-                    "anyOf": [
-                        {
-                            "field": "Microsoft.Web/sites/basicPublishingCredentialsPolicies/ftp.allow",
-                            "equals": "true"
-                        },
-                        {
-                            "field": "Microsoft.Web/sites/basicPublishingCredentialsPolicies/scm.allow",
-                            "equals": "true"
-                        }
-                    ]
-                }
-            ]
-        },
-        "then": {
-            "effect": "Deny"
-        }
-    },
-    "parameters": {}
-}
+$vms = Get-AzVM -Status
+$unencryptedVms = $vms | Where-Object { -not $_.StorageProfile.EncryptionAtHost }
+
+# Export to CSV
+$unencryptedVms | Select-Object Name, ResourceGroupName, Location | Export-Csv -Path "UnencryptedVMs.csv" -NoTypeInformation -Encoding UTF8
+
+Write-Host "Data exported to UnencryptedVMs.csv"

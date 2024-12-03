@@ -1,7 +1,23 @@
-$vms = Get-AzVM -Status
-$unencryptedVms = $vms | Where-Object { -not $_.StorageProfile.EncryptionAtHost }
+Business Justification for Suppressing LT-1: Microsoft Defender CSPM
 
-# Export to CSV
-$unencryptedVms | Select-Object Name, ResourceGroupName, Location | Export-Csv -Path "UnencryptedVMs.csv" -NoTypeInformation -Encoding UTF8
-
-Write-Host "Data exported to UnencryptedVMs.csv"
+	1.	Control Name: LT-1: Microsoft Defender CSPM should be enabled
+	2.	Control Description:
+Microsoft Defender CSPM provides comprehensive insights into the cloud security posture by continuously assessing resources and providing recommendations to enhance compliance and security.
+	3.	Reason for Suppression:
+	•	Cost Implications:
+The organization has opted not to purchase the Microsoft Defender CSPM license due to budgetary constraints and prioritization of other tools and services. This decision aligns with the organization’s financial strategy and current resource allocation.
+	•	Strategic Alignment:
+The organization has determined that the benefits of CSPM do not outweigh the costs for the current cloud environment, particularly as equivalent functionality is achieved through alternative tools and internal processes.
+	4.	Risk Management:
+	•	Compensating Controls:
+	•	Third-Party Tools: Other tools currently in use provide cloud posture assessments and align with the organization’s security requirements.
+	•	Custom Monitoring: Azure Policy and other built-in Azure tools are configured to enforce baseline compliance across subscriptions.
+	•	Periodic Audits: Regular audits and reviews ensure cloud configurations adhere to organizational security standards.
+	•	Risk Acceptance: The organization acknowledges the limitations of suppressing CSPM but has mitigated the associated risks through the above compensating controls.
+	5.	Approval Authority:
+	•	The decision to suppress LT-1 has been approved by [team/committee name] as part of the organization’s security and financial strategy.
+	6.	Reevaluation Timeline:
+	•	The suppression will be revisited during [specific timeline, e.g., quarterly budget reviews or annual financial planning] to assess whether enabling Microsoft Defender CSPM becomes financially viable or operationally necessary.
+	7.	Next Steps:
+	•	Continue leveraging compensating controls to maintain a secure and compliant cloud environment.
+	•	Monitor new features or changes to Defender CSPM that may offer more cost-effective or tailored solutions.

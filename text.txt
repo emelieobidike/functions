@@ -1,11 +1,29 @@
-function generateRandomString(length) {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
-}
-
-const randomString = generateRandomString(14);
-console.log(randomString);
+const query = `
+    WITH 
+        transfers AS (
+            SELECT
+                uid,
+                SUM(CASE WHEN credit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_received,
+                SUM(CASE WHEN debit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_sent
+            FROM transfer_ledger
+            GROUP BY uid
+        ),
+        withdrawals AS (
+            SELECT
+                uid,
+                SUM(CASE WHEN debit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_withdrawn
+            FROM withdrawals
+            GROUP BY uid
+        )
+    SELECT
+        t.uid,
+        COALESCE(t.total_received, 0) - (COALESCE(t.total_sent, 0) + COALESCE(w.total_withdrawn, 0)) AS balance
+    FROM
+        transfers t
+    LEFT JOIN
+        withdrawals w
+    ON
+        t.uid = w.uid
+    WHERE
+        t.uid = $1;
+  `;

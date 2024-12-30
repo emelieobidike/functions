@@ -1,29 +1,11 @@
 const query = `
-    WITH 
-        transfers AS (
-            SELECT
-                uid,
-                SUM(CASE WHEN credit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_received,
-                SUM(CASE WHEN debit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_sent
-            FROM transfer_ledger
-            GROUP BY uid
-        ),
-        withdrawals AS (
-            SELECT
-                uid,
-                SUM(CASE WHEN debit_phoneNo = uid AND success THEN amount ELSE 0 END) AS total_withdrawn
-            FROM withdrawals
-            GROUP BY uid
-        )
-    SELECT
-        t.uid,
-        COALESCE(t.total_received, 0) - (COALESCE(t.total_sent, 0) + COALESCE(w.total_withdrawn, 0)) AS balance
-    FROM
-        transfers t
-    LEFT JOIN
-        withdrawals w
-    ON
-        t.uid = w.uid
-    WHERE
-        t.uid = $1;
+    SELECT 
+        COALESCE(SUM(CASE WHEN credit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN debit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN debit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) AS balance
+    FROM (
+        SELECT credit_phoneNo, debit_phoneNo, amount, success FROM transfer_ledger
+        UNION ALL
+        SELECT NULL AS credit_phoneNo, debit_phoneNo, amount, success FROM withdrawals
+    ) combined;
   `;

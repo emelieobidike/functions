@@ -1,11 +1,29 @@
-const query = `
-    SELECT 
-        COALESCE(SUM(CASE WHEN credit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) -
-        COALESCE(SUM(CASE WHEN debit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) -
-        COALESCE(SUM(CASE WHEN debit_phoneNo = $1 AND success THEN amount ELSE 0 END), 0) AS balance
-    FROM (
-        SELECT credit_phoneNo, debit_phoneNo, amount, success FROM transfer_ledger
-        UNION ALL
-        SELECT NULL AS credit_phoneNo, debit_phoneNo, amount, success FROM withdrawals
-    ) combined;
-  `;
+function searchBanks(query, bankList) {
+  if (query.length < 3) {
+    return []; // Return an empty array if query is less than 3 characters
+  }
+
+  const lowerCaseQuery = query.toLowerCase();
+
+  return bankList
+    .map(bank => {
+      // Calculate relevance score based on the position of the query in the bank name
+      const lowerCaseBank = bank.toLowerCase();
+      const index = lowerCaseBank.indexOf(lowerCaseQuery);
+      const startsWith = lowerCaseBank.startsWith(lowerCaseQuery);
+
+      return {
+        bank,
+        relevance: startsWith ? 1 : index !== -1 ? 2 : 3,
+        index,
+      };
+    })
+    .filter(result => result.index !== -1) // Exclude banks that don't match the query
+    .sort((a, b) => {
+      // Sort by relevance first, then by index
+      if (a.relevance === b.relevance) {
+        return a.index - b.index;
+      }
+      return a.relevance - b.relevance;
+    })
+    .map(result => result.bank); // Return only the bank names

@@ -1,29 +1,44 @@
-function searchBanks(query, bankList) {
-  if (query.length < 3) {
-    return []; // Return an empty array if query is less than 3 characters
-  }
+# Connect to Azure AD and Azure if not already connected
+if (!(Get-AzureADSignedInUser)) { Connect-AzureAD }
+if (!(Get-AzContext)) { Connect-AzAccount }
 
-  const lowerCaseQuery = query.toLowerCase();
+# Get all disabled Azure AD user accounts
+$disabledAccounts = Get-AzureADUser -All $true | Where-Object { $_.AccountEnabled -eq $false }
 
-  return bankList
-    .map(bank => {
-      // Calculate relevance score based on the position of the query in the bank name
-      const lowerCaseBank = bank.toLowerCase();
-      const index = lowerCaseBank.indexOf(lowerCaseQuery);
-      const startsWith = lowerCaseBank.startsWith(lowerCaseQuery);
+# Initialize an array to hold results
+$results = @()
 
-      return {
-        bank,
-        relevance: startsWith ? 1 : index !== -1 ? 2 : 3,
-        index,
-      };
-    })
-    .filter(result => result.index !== -1) // Exclude banks that don't match the query
-    .sort((a, b) => {
-      // Sort by relevance first, then by index
-      if (a.relevance === b.relevance) {
-        return a.index - b.index;
-      }
-      return a.relevance - b.relevance;
-    })
-    .map(result => result.bank); // Return only the bank names
+# Iterate over all subscriptions
+$subscriptions = Get-AzSubscription
+foreach ($sub in $subscriptions) {
+    # Set the context to the subscription
+    Set-AzContext -SubscriptionId $sub.Id
+    
+    # Get all role assignments in the subscription
+    $roleAssignments = Get-AzRoleAssignment
+    
+    foreach ($assignment in $roleAssignments) {
+        # Check if the principal matches any of the disabled accounts
+        $disabledUser = $disabledAccounts | Where-Object { $_.ObjectId -eq $assignment.ObjectId }
+        
+        if ($disabledUser) {
+            $results += [PSCustomObject]@{
+                SubscriptionName = $sub.Name
+                ResourceName     = $assignment.Scope
+                Role             = $assignment.RoleDefinitionName
+                UserPrincipal    = $disabledUser.UserPrincipalName
+                DisplayName      = $disabledUser.DisplayName
+            }
+        }
+    }
+}
+
+# Output the results
+if ($results.Count -eq 0) {
+    Write-Output "No disabled accounts with access to Azure resources found."
+} else {
+    $results | Format-Table -AutoSize
+    # Export results to a CSV file
+    $results | Export-Csv -Path "DisabledAccountsAccess.csv" -NoTypeInformation
+    Write-Output "Results exported to DisabledAccountsAccess.csv"
+}

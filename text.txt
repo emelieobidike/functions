@@ -1,44 +1,65 @@
-# Connect to Azure AD and Azure if not already connected
-if (!(Get-AzureADSignedInUser)) { Connect-AzureAD }
-if (!(Get-AzContext)) { Connect-AzAccount }
+const { DefaultAzureCredential } = require("@azure/identity");
+const { AuthorizationManagementClient } = require("@azure/arm-authorization");
+const { Client } = require("@microsoft/microsoft-graph-client");
 
-# Get all disabled Azure AD user accounts
-$disabledAccounts = Get-AzureADUser -All $true | Where-Object { $_.AccountEnabled -eq $false }
+// Initialize Azure credentials
+const credential = new DefaultAzureCredential();
 
-# Initialize an array to hold results
-$results = @()
+// Function to get disabled Azure AD users
+async function getDisabledUsers() {
+    const graphClient = Client.initWithMiddleware({
+        authProvider: {
+            getAccessToken: async () => {
+                const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
+                return tokenResponse.token;
+            },
+        },
+    });
 
-# Iterate over all subscriptions
-$subscriptions = Get-AzSubscription
-foreach ($sub in $subscriptions) {
-    # Set the context to the subscription
-    Set-AzContext -SubscriptionId $sub.Id
-    
-    # Get all role assignments in the subscription
-    $roleAssignments = Get-AzRoleAssignment
-    
-    foreach ($assignment in $roleAssignments) {
-        # Check if the principal matches any of the disabled accounts
-        $disabledUser = $disabledAccounts | Where-Object { $_.ObjectId -eq $assignment.ObjectId }
-        
-        if ($disabledUser) {
-            $results += [PSCustomObject]@{
-                SubscriptionName = $sub.Name
-                ResourceName     = $assignment.Scope
-                Role             = $assignment.RoleDefinitionName
-                UserPrincipal    = $disabledUser.UserPrincipalName
-                DisplayName      = $disabledUser.DisplayName
+    const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
+    return users.value.filter(user => user.accountEnabled === false);
+}
+
+// Function to get all role assignments
+async function getRoleAssignments(subscriptionId) {
+    const authClient = new AuthorizationManagementClient(credential, subscriptionId);
+    const roleAssignments = [];
+    for await (const assignment of authClient.roleAssignments.list()) {
+        roleAssignments.push(assignment);
+    }
+    return roleAssignments;
+}
+
+// Main function to find disabled users with role assignments
+async function findDisabledUsersWithAccess() {
+    const disabledUsers = await getDisabledUsers();
+    console.table(disabledUsers, ["displayName", "userPrincipalName", "id"]);
+
+    console.log("\nFetching role assignments...");
+
+    const subscriptionId = "your-subscription-id"; // Replace with your Azure subscription ID
+    const roleAssignments = await getRoleAssignments(subscriptionId);
+
+    const results = [];
+    disabledUsers.forEach(user => {
+        roleAssignments.forEach(assignment => {
+            if (assignment.principalId === user.id) {
+                results.push({
+                    DisplayName: user.displayName,
+                    UserPrincipalName: user.userPrincipalName,
+                    Role: assignment.roleDefinitionName,
+                    Scope: assignment.scope,
+                });
             }
-        }
+        });
+    });
+
+    if (results.length > 0) {
+        console.log("\nDisabled users with access to resources:");
+        console.table(results);
+    } else {
+        console.log("\nNo disabled users found with access to resources.");
     }
 }
 
-# Output the results
-if ($results.Count -eq 0) {
-    Write-Output "No disabled accounts with access to Azure resources found."
-} else {
-    $results | Format-Table -AutoSize
-    # Export results to a CSV file
-    $results | Export-Csv -Path "DisabledAccountsAccess.csv" -NoTypeInformation
-    Write-Output "Results exported to DisabledAccountsAccess.csv"
-}
+findDisabledUsersWithAccess().catch(err => console.error("Error:", err));

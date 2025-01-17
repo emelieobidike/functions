@@ -2,64 +2,106 @@ const { DefaultAzureCredential } = require("@azure/identity");
 const { AuthorizationManagementClient } = require("@azure/arm-authorization");
 const { Client } = require("@microsoft/microsoft-graph-client");
 
-// Initialize Azure credentials
-const credential = new DefaultAzureCredential();
+module.exports = async function (context, req) {
+    context.log("Azure Function triggered.");
 
-// Function to get disabled Azure AD users
-async function getDisabledUsers() {
-    const graphClient = Client.initWithMiddleware({
-        authProvider: {
-            getAccessToken: async () => {
-                const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
-                return tokenResponse.token;
+    const credential = new DefaultAzureCredential();
+
+    // Function to get disabled Azure AD users
+    async function getDisabledUsers() {
+        context.log("Fetching disabled Azure AD users...");
+        const graphClient = Client.initWithMiddleware({
+            authProvider: {
+                getAccessToken: async () => {
+                    const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
+                    return tokenResponse.token;
+                },
             },
-        },
-    });
-
-    const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
-    return users.value.filter(user => user.accountEnabled === false);
-}
-
-// Function to get all role assignments
-async function getRoleAssignments(subscriptionId) {
-    const authClient = new AuthorizationManagementClient(credential, subscriptionId);
-    const roleAssignments = [];
-    for await (const assignment of authClient.roleAssignments.list()) {
-        roleAssignments.push(assignment);
-    }
-    return roleAssignments;
-}
-
-// Main function to find disabled users with role assignments
-async function findDisabledUsersWithAccess() {
-    const disabledUsers = await getDisabledUsers();
-    console.table(disabledUsers, ["displayName", "userPrincipalName", "id"]);
-
-    console.log("\nFetching role assignments...");
-
-    const subscriptionId = "your-subscription-id"; // Replace with your Azure subscription ID
-    const roleAssignments = await getRoleAssignments(subscriptionId);
-
-    const results = [];
-    disabledUsers.forEach(user => {
-        roleAssignments.forEach(assignment => {
-            if (assignment.principalId === user.id) {
-                results.push({
-                    DisplayName: user.displayName,
-                    UserPrincipalName: user.userPrincipalName,
-                    Role: assignment.roleDefinitionName,
-                    Scope: assignment.scope,
-                });
-            }
         });
-    });
 
-    if (results.length > 0) {
-        console.log("\nDisabled users with access to resources:");
-        console.table(results);
-    } else {
-        console.log("\nNo disabled users found with access to resources.");
+        const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
+        return users.value.filter(user => user.accountEnabled === false);
     }
-}
 
-findDisabledUsersWithAccess().catch(err => console.error("Error:", err));
+    // Function to get all role assignments
+    async function getRoleAssignments(subscriptionId) {
+        context.log(`Fetching role assignments for subscription: ${subscriptionId}`);
+        const authClient = new AuthorizationManagementClient(credential, subscriptionId);
+        const roleAssignments = [];
+        for await (const assignment of authClient.roleAssignments.list()) {
+            roleAssignments.push(assignment);
+        }
+        return roleAssignments;
+    }
+
+    // Function to construct an HTML table
+    function generateHtmlTable(data) {
+        let html = "<table border='1' style='border-collapse: collapse; width: 100%;'>";
+        html += `
+            <thead>
+                <tr>
+                    <th>Display Name</th>
+                    <th>User Principal Name</th>
+                    <th>Role</th>
+                    <th>Scope</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        data.forEach(row => {
+            html += `
+                <tr>
+                    <td>${row.DisplayName}</td>
+                    <td>${row.UserPrincipalName}</td>
+                    <td>${row.Role}</td>
+                    <td>${row.Scope}</td>
+                </tr>
+            `;
+        });
+        html += "</tbody></table>";
+        return html;
+    }
+
+    // Main process
+    try {
+        const disabledUsers = await getDisabledUsers();
+        context.log(`Found ${disabledUsers.length} disabled Azure AD users.`);
+
+        const subscriptionId = "your-subscription-id"; // Replace with your Azure subscription ID
+        const roleAssignments = await getRoleAssignments(subscriptionId);
+
+        const results = [];
+        disabledUsers.forEach(user => {
+            roleAssignments.forEach(assignment => {
+                if (assignment.principalId === user.id) {
+                    results.push({
+                        DisplayName: user.displayName,
+                        UserPrincipalName: user.userPrincipalName,
+                        Role: assignment.roleDefinitionName,
+                        Scope: assignment.scope,
+                    });
+                }
+            });
+        });
+
+        context.log(`Found ${results.length} disabled users with role assignments.`);
+
+        // Generate the HTML table
+        const htmlTable = generateHtmlTable(results);
+
+        // Return the HTML table as the response
+        context.res = {
+            status: 200,
+            headers: {
+                "Content-Type": "text/html",
+            },
+            body: htmlTable,
+        };
+    } catch (err) {
+        context.log.error("Error occurred:", err);
+        context.res = {
+            status: 500,
+            body: { error: "An error occurred while processing the request." },
+        };
+    }
+};

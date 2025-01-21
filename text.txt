@@ -1,107 +1,79 @@
 const { DefaultAzureCredential } = require("@azure/identity");
-const { AuthorizationManagementClient } = require("@azure/arm-authorization");
+const { AuthorizationManagementClient, SubscriptionClient } = require("@azure/arm-subscriptions");
 const { Client } = require("@microsoft/microsoft-graph-client");
 
-module.exports = async function (context, req) {
-    context.log("Azure Function triggered.");
+// Initialize Azure credentials
+const credential = new DefaultAzureCredential();
 
-    const credential = new DefaultAzureCredential();
+// Function to get all subscriptions in the tenant
+async function getAllSubscriptions() {
+    const subscriptionClient = new SubscriptionClient(credential);
+    const subscriptions = [];
+    for await (const subscription of subscriptionClient.subscriptions.list()) {
+        subscriptions.push(subscription.subscriptionId);
+    }
+    return subscriptions;
+}
 
-    // Function to get disabled Azure AD users
-    async function getDisabledUsers() {
-        context.log("Fetching disabled Azure AD users...");
-        const graphClient = Client.initWithMiddleware({
-            authProvider: {
-                getAccessToken: async () => {
-                    const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
-                    return tokenResponse.token;
-                },
+// Function to get disabled Azure AD users
+async function getDisabledUsers() {
+    const graphClient = Client.initWithMiddleware({
+        authProvider: {
+            getAccessToken: async () => {
+                const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
+                return tokenResponse.token;
             },
-        });
+        },
+    });
 
-        const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
-        return users.value.filter(user => user.accountEnabled === false);
+    const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
+    return users.value.filter(user => user.accountEnabled === false);
+}
+
+// Function to get all role assignments for a subscription
+async function getRoleAssignments(subscriptionId) {
+    const authClient = new AuthorizationManagementClient(credential, subscriptionId);
+    const roleAssignments = [];
+    for await (const assignment of authClient.roleAssignments.list()) {
+        roleAssignments.push(assignment);
     }
+    return roleAssignments;
+}
 
-    // Function to get all role assignments
-    async function getRoleAssignments(subscriptionId) {
-        context.log(`Fetching role assignments for subscription: ${subscriptionId}`);
-        const authClient = new AuthorizationManagementClient(credential, subscriptionId);
-        const roleAssignments = [];
-        for await (const assignment of authClient.roleAssignments.list()) {
-            roleAssignments.push(assignment);
-        }
-        return roleAssignments;
-    }
-
-    // Function to construct an HTML table
-    function generateHtmlTable(data) {
-        let html = "<table border='1' style='border-collapse: collapse; width: 100%;'>";
-        html += `
-            <thead>
-                <tr>
-                    <th>Display Name</th>
-                    <th>User Principal Name</th>
-                    <th>Role</th>
-                    <th>Scope</th>
-                </tr>
-            </thead>
-            <tbody>
-        `;
-        data.forEach(row => {
-            html += `
-                <tr>
-                    <td>${row.DisplayName}</td>
-                    <td>${row.UserPrincipalName}</td>
-                    <td>${row.Role}</td>
-                    <td>${row.Scope}</td>
-                </tr>
-            `;
-        });
-        html += "</tbody></table>";
-        return html;
-    }
-
-    // Main process
+// Main process
+(async () => {
     try {
-        const disabledUsers = await getDisabledUsers();
-        context.log(`Found ${disabledUsers.length} disabled Azure AD users.`);
+        console.log("Fetching all subscriptions in the tenant...");
+        const subscriptions = await getAllSubscriptions();
+        console.log(`Found ${subscriptions.length} subscriptions.`);
 
-        const subscriptionId = "your-subscription-id"; // Replace with your Azure subscription ID
-        const roleAssignments = await getRoleAssignments(subscriptionId);
+        console.log("Fetching disabled Azure AD users...");
+        const disabledUsers = await getDisabledUsers();
+        console.log(`Found ${disabledUsers.length} disabled users.`);
 
         const results = [];
-        disabledUsers.forEach(user => {
-            roleAssignments.forEach(assignment => {
-                if (assignment.principalId === user.id) {
-                    results.push({
-                        DisplayName: user.displayName,
-                        UserPrincipalName: user.userPrincipalName,
-                        Role: assignment.roleDefinitionName,
-                        Scope: assignment.scope,
-                    });
-                }
+        for (const subscriptionId of subscriptions) {
+            console.log(`Fetching role assignments for subscription: ${subscriptionId}`);
+            const roleAssignments = await getRoleAssignments(subscriptionId);
+
+            disabledUsers.forEach(user => {
+                roleAssignments.forEach(assignment => {
+                    if (assignment.principalId === user.id) {
+                        results.push({
+                            SubscriptionId: subscriptionId,
+                            DisplayName: user.displayName,
+                            UserPrincipalName: user.userPrincipalName,
+                            Role: assignment.roleDefinitionName,
+                            Scope: assignment.scope,
+                        });
+                    }
+                });
             });
-        });
+        }
 
-        context.log(`Found ${results.length} disabled users with role assignments.`);
-
-        // Generate the HTML table
-        const htmlTable = generateHtmlTable(results);
-
-        // Return the HTML table as the response
-        context.res = {
-            status: 200,
-            headers: {
-                "Content-Type": "text/html",
-            },
-            body: htmlTable,
-        };
+        console.log(`Found ${results.length} disabled users with role assignments.`);
+        console.table(results);
     } catch (err) {
-        context.log.error("Error occurred:", err);
-        context.res = {
-            status: 500,
-            body: { error: "An error occurred while processing the request." },
-        };
+        console.error("Error:", err);
     }
-};
+})();

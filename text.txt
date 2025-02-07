@@ -1,79 +1,44 @@
-const { DefaultAzureCredential } = require("@azure/identity");
-const { AuthorizationManagementClient, SubscriptionClient } = require("@azure/arm-subscriptions");
-const { Client } = require("@microsoft/microsoft-graph-client");
-
-// Initialize Azure credentials
-const credential = new DefaultAzureCredential();
-
-// Function to get all subscriptions in the tenant
-async function getAllSubscriptions() {
-    const subscriptionClient = new SubscriptionClient(credential);
-    const subscriptions = [];
-    for await (const subscription of subscriptionClient.subscriptions.list()) {
-        subscriptions.push(subscription.subscriptionId);
-    }
-    return subscriptions;
+# Connect to Azure if not already connected
+if (-not (Get-AzContext)) {
+    Connect-AzAccount
 }
 
-// Function to get disabled Azure AD users
-async function getDisabledUsers() {
-    const graphClient = Client.initWithMiddleware({
-        authProvider: {
-            getAccessToken: async () => {
-                const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
-                return tokenResponse.token;
-            },
-        },
-    });
+# Get all subscriptions
+$subscriptions = Get-AzSubscription
 
-    const users = await graphClient.api("/users").select("id,displayName,userPrincipalName,accountEnabled").get();
-    return users.value.filter(user => user.accountEnabled === false);
-}
+# Initialize an array to store VMs with diagnostic logs enabled
+$diagnosticVMs = @()
 
-// Function to get all role assignments for a subscription
-async function getRoleAssignments(subscriptionId) {
-    const authClient = new AuthorizationManagementClient(credential, subscriptionId);
-    const roleAssignments = [];
-    for await (const assignment of authClient.roleAssignments.list()) {
-        roleAssignments.push(assignment);
-    }
-    return roleAssignments;
-}
+foreach ($subscription in $subscriptions) {
+    # Set the current subscription
+    Set-AzContext -SubscriptionId $subscription.Id
 
-// Main process
-(async () => {
-    try {
-        console.log("Fetching all subscriptions in the tenant...");
-        const subscriptions = await getAllSubscriptions();
-        console.log(`Found ${subscriptions.length} subscriptions.`);
+    # Get all VMs in the subscription
+    $vms = Get-AzVM
 
-        console.log("Fetching disabled Azure AD users...");
-        const disabledUsers = await getDisabledUsers();
-        console.log(`Found ${disabledUsers.length} disabled users.`);
+    foreach ($vm in $vms) {
+        # Get diagnostic settings for the VM
+        $diagnosticSettings = Get-AzDiagnosticSetting -ResourceId $vm.Id -ErrorAction SilentlyContinue
 
-        const results = [];
-        for (const subscriptionId of subscriptions) {
-            console.log(`Fetching role assignments for subscription: ${subscriptionId}`);
-            const roleAssignments = await getRoleAssignments(subscriptionId);
-
-            disabledUsers.forEach(user => {
-                roleAssignments.forEach(assignment => {
-                    if (assignment.principalId === user.id) {
-                        results.push({
-                            SubscriptionId: subscriptionId,
-                            DisplayName: user.displayName,
-                            UserPrincipalName: user.userPrincipalName,
-                            Role: assignment.roleDefinitionName,
-                            Scope: assignment.scope,
-                        });
-                    }
-                });
-            });
+        if ($diagnosticSettings) {
+            # If diagnostic settings exist, add the VM to the list
+            $diagnosticVMs += [PSCustomObject]@{
+                Subscription   = $subscription.Name
+                ResourceGroup  = $vm.ResourceGroupName
+                VMName         = $vm.Name
+                Location       = $vm.Location
+            }
         }
-
-        console.log(`Found ${results.length} disabled users with role assignments.`);
-        console.table(results);
-    } catch (err) {
-        console.error("Error:", err);
     }
-})();
+}
+
+# Output the results
+if ($diagnosticVMs.Count -gt 0) {
+    $diagnosticVMs | Format-Table -AutoSize
+} else {
+    Write-Host "No VMs with diagnostic logs enabled found."
+}
+
+# Optionally, export the results to a CSV file
+$diagnosticVMs | Export-Csv -Path "VMsWithDiagnosticLogs.csv" -NoTypeInformation
+Write-Host "Results exported to VMsWithDiagnosticLogs.csv"

@@ -1,91 +1,84 @@
 {
-	"parameters": {},
-	"policyRule": {
-		"if": {
-			"field": "type",
-			"notEquals": "Microsoft.Resources/subscriptions/resourceGroups"
-		},
-		"then": {
-			"effect": "modify",
-			"details": {
-				"roleDefinitionIds": [
-					"/providers/Microsoft.Authorization/roleDefinitions/4a9ae827-6dc8-4573-8ac7-8239d42aa03f"
-				],
-				"operations": [
-					{
-						"condition": "[not(field('tags[\"ApplicationName\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['ApplicationName']",
-						"value": "[resourceGroup().tags['ApplicationName']]"
-					},
-					{
-						"condition": "[not(field('tags[\"Business\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['Business']",
-						"value": "[resourceGroup().tags['Business']]"
-					},
-					{
-						"condition": "[not(field('tags[\"ComplianceRequirement\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['ComplianceRequirement']",
-						"value": "[resourceGroup().tags['ComplianceRequirement']]"
-					},
-					{
-						"condition": "[not(field('tags[\"ConfidentialityLevel\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['ConfidentialityLevel']",
-						"value": "[resourceGroup().tags['ConfidentialityLevel']]"
-					},
-					{
-						"condition": "[not(field('tags[\"CostCenter\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['CostCenter']",
-						"value": "[resourceGroup().tags['CostCenter']]"
-					},
-					{
-						"condition": "[not(field('tags[\"DRTier\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['DRTier']",
-						"value": "[resourceGroup().tags['DRTier']]"
-					},
-					{
-						"condition": "[not(field('tags[\"Environment\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['Environment']",
-						"value": "[resourceGroup().tags['Environment']]"
-					},
-					{
-						"condition": "[not(field('tags[\"PrimaryContact\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['PrimaryContact']",
-						"value": "[resourceGroup().tags['PrimaryContact']]"
-					},
-					{
-						"condition": "[not(field('tags[\"RBACTeam\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['RBACTeam']",
-						"value": "[resourceGroup().tags['RBACTeam']]"
-					},
-					{
-						"condition": "[not(field('tags[\"Schedule\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['Schedule']",
-						"value": "[resourceGroup().tags['Schedule']]"
-					},
-					{
-						"condition": "[not(field('tags[\"Sector\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['Sector']",
-						"value": "[resourceGroup().tags['Sector']]"
-					},
-					{
-						"condition": "[not(field('tags[\"Workgroup\"]'))]",
-						"operation": "addOrReplace",
-						"field": "tags['Workgroup']",
-						"value": "[resourceGroup().tags['Workgroup']]"
-					}
-				]
-			}
-		}
-	}
+  "properties": {
+    "displayName": "Inherit 12 tags from resource group (no conditions)",
+    "mode": "Indexed",
+    "description": "Always adds these tags from resource group to resources (overwrites existing values).",
+    "parameters": {},
+    "policyRule": {
+      "if": {
+        "field": "type",
+        "notEquals": "Microsoft.Resources/subscriptions/resourceGroups"
+      },
+      "then": {
+        "effect": "modify",
+        "details": {
+          "roleDefinitionIds": [
+            "/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+          ],
+          "operations": [
+            {
+              "operation": "addOrReplace",
+              "field": "tags['ApplicationName']",
+              "value": "[resourceGroup().tags['ApplicationName']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['Business']",
+              "value": "[resourceGroup().tags['Business']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['ComplianceRequirement']",
+              "value": "[resourceGroup().tags['ComplianceRequirement']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['ConfidentialityLevel']",
+              "value": "[resourceGroup().tags['ConfidentialityLevel']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['CostCenter']",
+              "value": "[resourceGroup().tags['CostCenter']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['DRTier']",
+              "value": "[resourceGroup().tags['DRTier']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['Environment']",
+              "value": "[resourceGroup().tags['Environment']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['PrimaryContact']",
+              "value": "[resourceGroup().tags['PrimaryContact']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['RBACTeam']",
+              "value": "[resourceGroup().tags['RBACTeam']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['Schedule']",
+              "value": "[resourceGroup().tags['Schedule']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['Sector']",
+              "value": "[resourceGroup().tags['Sector']]"
+            },
+            {
+              "operation": "addOrReplace",
+              "field": "tags['Workgroup']",
+              "value": "[resourceGroup().tags['Workgroup']]"
+            }
+          ]
+        }
+      }
+    }
+  }
 }

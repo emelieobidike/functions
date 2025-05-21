@@ -1,178 +1,47 @@
-{
-  "policies": [
-    {
-      "name": "enforce-environment-tag",
-      "properties": {
-        "displayName": "Enforce allowed values for Environment tag",
-        "mode": "Indexed",
-        "description": "Only allows Production, Development, or Test as values for the Environment tag.",
-        "parameters": {
-          "allowedValues": {
-            "type": "Array"
-          }
-        },
-        "policyRule": {
-          "if": {
-            "allOf": [
-              {
-                "field": "tags['Environment']",
-                "exists": true
-              },
-              {
-                "field": "tags['Environment']",
-                "notIn": "[parameters('allowedValues')]"
-              }
-            ]
-          },
-          "then": {
-            "effect": "deny"
-          }
-        }
-      }
-    },
-    {
-      "name": "enforce-compliance-tag",
-      "properties": {
-        "displayName": "Enforce allowed values for ComplianceRequirement tag",
-        "mode": "Indexed",
-        "description": "Only allows Standard or None as values for the ComplianceRequirement tag.",
-        "parameters": {
-          "allowedValues": {
-            "type": "Array"
-          }
-        },
-        "policyRule": {
-          "if": {
-            "allOf": [
-              {
-                "field": "tags['ComplianceRequirement']",
-                "exists": true
-              },
-              {
-                "field": "tags['ComplianceRequirement']",
-                "notIn": "[parameters('allowedValues')]"
-              }
-            ]
-          },
-          "then": {
-            "effect": "deny"
-          }
-        }
-      }
-    },
-    {
-      "name": "enforce-drtier-tag",
-      "properties": {
-        "displayName": "Enforce allowed values for DRTier tag",
-        "mode": "Indexed",
-        "description": "Only allows None, Tier0 through Tier4 as values for the DRTier tag.",
-        "parameters": {
-          "allowedValues": {
-            "type": "Array"
-          }
-        },
-        "policyRule": {
-          "if": {
-            "allOf": [
-              {
-                "field": "tags['DRTier']",
-                "exists": true
-              },
-              {
-                "field": "tags['DRTier']",
-                "notIn": "[parameters('allowedValues')]"
-              }
-            ]
-          },
-          "then": {
-            "effect": "deny"
-          }
-        }
-      }
-    },
-    {
-      "name": "enforce-schedule-tag",
-      "properties": {
-        "displayName": "Enforce allowed values for Schedule tag",
-        "mode": "Indexed",
-        "description": "Only allows None, Stargate, or AlwaysOn as values for the Schedule tag.",
-        "parameters": {
-          "allowedValues": {
-            "type": "Array"
-          }
-        },
-        "policyRule": {
-          "if": {
-            "allOf": [
-              {
-                "field": "tags['Schedule']",
-                "exists": true
-              },
-              {
-                "field": "tags['Schedule']",
-                "notIn": "[parameters('allowedValues')]"
-              }
-            ]
-          },
-          "then": {
-            "effect": "deny"
-          }
-        }
-      }
-    },
-    {
-      "name": "enforce-primarycontact-pattern",
-      "properties": {
-        "displayName": "Enforce email domain for PrimaryContact tag",
-        "mode": "Indexed",
-        "description": "PrimaryContact tag must end with @warehouser.com.",
-        "parameters": {
-          "suffixPattern": {
-            "type": "String"
-          }
-        },
-        "policyRule": {
-          "if": {
-            "allOf": [
-              {
-                "field": "tags['PrimaryContact']",
-                "exists": true
-              },
-              {
-                "field": "tags['PrimaryContact']",
-                "notLike": "[parameters('suffixPattern')]"
-              }
-            ]
-          },
-          "then": {
-            "effect": "deny"
-          }
-        }
-      }
-    },
-    {
-      "name": "audit-other-tags",
-      "properties": {
-        "displayName": "Audit other tag presence",
-        "mode": "Indexed",
-        "description": "Audits the presence of optional tags like ApplicationName, Business, ConfidentialityLevel, CostCenter, RBACTeam, Sector, and Workgroup.",
-        "policyRule": {
-          "if": {
-            "anyOf": [
-              { "field": "tags['ApplicationName']", "exists": false },
-              { "field": "tags['Business']", "exists": false },
-              { "field": "tags['ConfidentialityLevel']", "exists": false },
-              { "field": "tags['CostCenter']", "exists": false },
-              { "field": "tags['RBACTeam']", "exists": false },
-              { "field": "tags['Sector']", "exists": false },
-              { "field": "tags['Workgroup']", "exists": false }
-            ]
-          },
-          "then": {
-            "effect": "audit"
-          }
-        }
-      }
-    }
-  ]
-}
+User Story Title
+
+Identify and Tag Sensitive Azure Key Vault Secrets Across Subscriptions
+
+⸻
+
+Description
+
+As a Cloud Platform Engineer, I want to identify sensitive secrets across all Azure Key Vaults within our subscriptions by retrieving, reviewing, and tagging them accordingly. This process will allow us to enforce better governance and security around secret management. After tagging, I will develop and execute a script that reviews all Key Vault secrets and flags them based on sensitivity, helping us separate sensitive secrets from non-sensitive ones (e.g., HTTP URLs).
+
+⸻
+
+Acceptance Criteria
+	1.	All Key Vaults across active subscriptions are enumerated.
+	2.	Owners of each Key Vault are identified and contacted.
+	3.	Owners have been requested to tag each secret within their Key Vaults based on sensitivity.
+	4.	A script is created that iterates through all Key Vaults and secrets, reads their tags, and categorizes them accordingly.
+	5.	The script successfully identifies and flags non-sensitive secrets (e.g., public URLs).
+	6.	The output of the script provides a clear list of sensitive and non-sensitive secrets for auditing purposes.
+
+⸻
+
+Tasks
+	1.	Enumerate All Key Vaults
+	•	Use Azure CLI or PowerShell to list all Key Vaults across subscriptions.
+	2.	Identify and Document Key Vault Owners
+	•	Use role assignments or resource metadata to identify Key Vault owners.
+	•	Prepare a contact list for communication.
+	3.	Reach Out to Owners for Tagging
+	•	Send communication to Key Vault owners requesting that secrets be tagged as sensitive or non-sensitive.
+	•	Provide examples and tagging standards.
+	4.	Create Tagging Standards Document
+	•	Define what qualifies as sensitive vs. non-sensitive.
+	•	Share the tagging guideline with Key Vault owners.
+	5.	Create Script to Analyze Secrets and Tags
+	•	Script should:
+	•	Authenticate to Azure
+	•	Iterate through all Key Vaults
+	•	List secrets in each Key Vault
+	•	Read secret tags
+	•	Classify based on sensitive tag or default logic
+	6.	Run Script and Generate Report
+	•	Execute script and review results.
+	•	Document list of untagged, sensitive, and non-sensitive secrets.
+	7.	Validate and Refine Output
+	•	Review flagged results with key stakeholders.
+	•	Refine tagging or detection logic as needed.

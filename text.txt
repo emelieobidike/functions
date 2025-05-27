@@ -4,10 +4,10 @@ $subscriptions = @(
     "SUBSCRIPTION_ID_2"
 )
 
-# Output file path
-$outputFile = "KeyVaultSecretsReport.csv"
+# Output file
+$outputFile = "KeyVaultOwnersReport.csv"
 
-# Initialize results array
+# Initialize result array
 $results = @()
 
 foreach ($sub in $subscriptions) {
@@ -19,15 +19,16 @@ foreach ($sub in $subscriptions) {
         $vaultName = $kv.name
         $resourceGroup = $kv.resourceGroup
 
-        # Get Key Vault tags
+        # Try to get tags from Key Vault
         $kvTags = az resource show --ids $(az keyvault show -n $vaultName --query id -o tsv) --query tags -o json | ConvertFrom-Json
 
-        # Fallback: try getting tags from resource group if not found in KV
+        # Fallback: try getting tags from resource group if not found in Key Vault
         if (-not $kvTags) {
             $kvTags = az group show --name $resourceGroup --query tags -o json | ConvertFrom-Json
         }
 
-        $owner = $null
+        # Find Primary Contact
+        $owner = "Unknown"
         foreach ($key in "PrimaryContact", "primaryContact", "primary_contact") {
             if ($kvTags.ContainsKey($key)) {
                 $owner = $kvTags[$key]
@@ -35,20 +36,12 @@ foreach ($sub in $subscriptions) {
             }
         }
 
-        if (-not $owner) {
-            $owner = "Unknown"
-        }
-
-        $secrets = az keyvault secret list --vault-name $vaultName --query "[].name" -o json | ConvertFrom-Json
-
-        foreach ($secret in $secrets) {
-            $results += [PSCustomObject]@{
-                Subscription   = $sub
-                KeyVaultName   = $vaultName
-                SecretName     = $secret
-                ResourceGroup  = $resourceGroup
-                Owner          = $owner
-            }
+        # Add to results
+        $results += [PSCustomObject]@{
+            Subscription   = $sub
+            KeyVaultName   = $vaultName
+            ResourceGroup  = $resourceGroup
+            Owner          = $owner
         }
     }
 }
@@ -56,4 +49,4 @@ foreach ($sub in $subscriptions) {
 # Export to CSV
 $results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
 
-Write-Host "CSV report saved to $outputFile"
+Write-Host "Key Vault ownership report saved to $outputFile"

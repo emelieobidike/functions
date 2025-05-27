@@ -1,47 +1,59 @@
-User Story Title
+# Define your subscriptions
+$subscriptions = @(
+    "SUBSCRIPTION_ID_1",
+    "SUBSCRIPTION_ID_2"
+)
 
-Identify and Tag Sensitive Azure Key Vault Secrets Across Subscriptions
+# Output file path
+$outputFile = "KeyVaultSecretsReport.csv"
 
-⸻
+# Initialize results array
+$results = @()
 
-Description
+foreach ($sub in $subscriptions) {
+    az account set --subscription $sub
 
-As a Cloud Platform Engineer, I want to identify sensitive secrets across all Azure Key Vaults within our subscriptions by retrieving, reviewing, and tagging them accordingly. This process will allow us to enforce better governance and security around secret management. After tagging, I will develop and execute a script that reviews all Key Vault secrets and flags them based on sensitivity, helping us separate sensitive secrets from non-sensitive ones (e.g., HTTP URLs).
+    $keyVaults = az keyvault list --query "[].{name:name, resourceGroup:resourceGroup}" -o json | ConvertFrom-Json
 
-⸻
+    foreach ($kv in $keyVaults) {
+        $vaultName = $kv.name
+        $resourceGroup = $kv.resourceGroup
 
-Acceptance Criteria
-	1.	All Key Vaults across active subscriptions are enumerated.
-	2.	Owners of each Key Vault are identified and contacted.
-	3.	Owners have been requested to tag each secret within their Key Vaults based on sensitivity.
-	4.	A script is created that iterates through all Key Vaults and secrets, reads their tags, and categorizes them accordingly.
-	5.	The script successfully identifies and flags non-sensitive secrets (e.g., public URLs).
-	6.	The output of the script provides a clear list of sensitive and non-sensitive secrets for auditing purposes.
+        # Get Key Vault tags
+        $kvTags = az resource show --ids $(az keyvault show -n $vaultName --query id -o tsv) --query tags -o json | ConvertFrom-Json
 
-⸻
+        # Fallback: try getting tags from resource group if not found in KV
+        if (-not $kvTags) {
+            $kvTags = az group show --name $resourceGroup --query tags -o json | ConvertFrom-Json
+        }
 
-Tasks
-	1.	Enumerate All Key Vaults
-	•	Use Azure CLI or PowerShell to list all Key Vaults across subscriptions.
-	2.	Identify and Document Key Vault Owners
-	•	Use role assignments or resource metadata to identify Key Vault owners.
-	•	Prepare a contact list for communication.
-	3.	Reach Out to Owners for Tagging
-	•	Send communication to Key Vault owners requesting that secrets be tagged as sensitive or non-sensitive.
-	•	Provide examples and tagging standards.
-	4.	Create Tagging Standards Document
-	•	Define what qualifies as sensitive vs. non-sensitive.
-	•	Share the tagging guideline with Key Vault owners.
-	5.	Create Script to Analyze Secrets and Tags
-	•	Script should:
-	•	Authenticate to Azure
-	•	Iterate through all Key Vaults
-	•	List secrets in each Key Vault
-	•	Read secret tags
-	•	Classify based on sensitive tag or default logic
-	6.	Run Script and Generate Report
-	•	Execute script and review results.
-	•	Document list of untagged, sensitive, and non-sensitive secrets.
-	7.	Validate and Refine Output
-	•	Review flagged results with key stakeholders.
-	•	Refine tagging or detection logic as needed.
+        $owner = $null
+        foreach ($key in "PrimaryContact", "primaryContact", "primary_contact") {
+            if ($kvTags.ContainsKey($key)) {
+                $owner = $kvTags[$key]
+                break
+            }
+        }
+
+        if (-not $owner) {
+            $owner = "Unknown"
+        }
+
+        $secrets = az keyvault secret list --vault-name $vaultName --query "[].name" -o json | ConvertFrom-Json
+
+        foreach ($secret in $secrets) {
+            $results += [PSCustomObject]@{
+                Subscription   = $sub
+                KeyVaultName   = $vaultName
+                SecretName     = $secret
+                ResourceGroup  = $resourceGroup
+                Owner          = $owner
+            }
+        }
+    }
+}
+
+# Export to CSV
+$results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+
+Write-Host "CSV report saved to $outputFile"

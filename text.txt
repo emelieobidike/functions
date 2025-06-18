@@ -1,52 +1,72 @@
-# Define your subscriptions
-$subscriptions = @(
-    "SUBSCRIPTION_ID_1",
-    "SUBSCRIPTION_ID_2"
+param (
+    [string]$OutputFile = "exported_config.auto.tfvars.json"
 )
 
-# Output file
-$outputFile = "KeyVaultOwnersReport.csv"
+function Get-AllSubscriptions {
+    az account list --query "[].id" -o tsv
+}
 
-# Initialize result array
-$results = @()
+function Get-PolicyAssignmentsForScope($scope) {
+    az policy assignment list --scope $scope | ConvertFrom-Json
+}
 
+function Get-InitiativeAssignmentsForScope($scope) {
+    az policy assignment list --scope $scope --query "[?policyDefinitionId.contains(@, 'policySetDefinitions')]" | ConvertFrom-Json
+}
+
+function Get-FormattedAssignment($assignment) {
+    return @{
+        name                  = $assignment.name
+        is_custom             = $false
+        policy_definition_id  = $assignment.policyDefinitionId
+        policy_key            = $null
+        enforcement           = ($assignment.enforcementMode -eq "Default")
+        parameters            = if ($assignment.parameters) { $assignment.parameters | ConvertTo-Json -Compress } else { "{}" }
+    }
+}
+
+$output = @{
+    policies    = @{}
+    initiatives = @{}
+    exemptions  = @{}
+}
+
+$subscriptions = Get-AllSubscriptions
 foreach ($sub in $subscriptions) {
-    az account set --subscription $sub
+    $subScope = "/subscriptions/$sub"
 
-    $keyVaults = az keyvault list --query "[].{name:name, resourceGroup:resourceGroup}" -o json | ConvertFrom-Json
+    # Process individual policy assignments (not part of initiatives)
+    $assignments = Get-PolicyAssignmentsForScope -scope $subScope | Where-Object {
+        $_.policyDefinitionId -notlike "*policySetDefinitions*"
+    }
 
-    foreach ($kv in $keyVaults) {
-        $vaultName = $kv.name
-        $resourceGroup = $kv.resourceGroup
-
-        # Try to get tags from Key Vault
-        $kvTags = az resource show --ids $(az keyvault show -n $vaultName --query id -o tsv) --query tags -o json | ConvertFrom-Json
-
-        # Fallback: try getting tags from resource group if not found in Key Vault
-        if (-not $kvTags) {
-            $kvTags = az group show --name $resourceGroup --query tags -o json | ConvertFrom-Json
+    if ($assignments.Count -gt 0) {
+        $output.policies[$sub] = @{
+            scope_type         = "subscription"
+            scope_id           = $subScope
+            policy_assignments = @()
         }
 
-        # Find Primary Contact
-        $owner = "Unknown"
-        foreach ($key in "PrimaryContact", "primaryContact", "primary_contact") {
-            if ($kvTags.ContainsKey($key)) {
-                $owner = $kvTags[$key]
-                break
-            }
+        foreach ($a in $assignments) {
+            $output.policies[$sub].policy_assignments += Get-FormattedAssignment -assignment $a
+        }
+    }
+
+    # Process initiatives
+    $initiatives = Get-InitiativeAssignmentsForScope -scope $subScope
+
+    if ($initiatives.Count -gt 0) {
+        $output.initiatives[$sub] = @{
+            scope_type         = "subscription"
+            scope_id           = $subScope
+            policy_assignments = @()
         }
 
-        # Add to results
-        $results += [PSCustomObject]@{
-            Subscription   = $sub
-            KeyVaultName   = $vaultName
-            ResourceGroup  = $resourceGroup
-            Owner          = $owner
+        foreach ($i in $initiatives) {
+            $output.initiatives[$sub].policy_assignments += Get-FormattedAssignment -assignment $i
         }
     }
 }
 
-# Export to CSV
-$results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
-
-Write-Host "Key Vault ownership report saved to $outputFile"
+$output | ConvertTo-Json -Depth 10 | Out-File -Encoding utf8 -FilePath $OutputFile
+Write-Output "Policy and initiative assignments exported to $OutputFile"

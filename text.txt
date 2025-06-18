@@ -3,7 +3,7 @@ param (
 )
 
 function Get-AllSubscriptions {
-    az account list --query "[].id" -o tsv
+    az account list --query "[].{id:id, name:name}" -o json | ConvertFrom-Json
 }
 
 function Get-PolicyAssignmentsForScope($scope) {
@@ -33,11 +33,13 @@ $output = @{
 
 $subscriptions = Get-AllSubscriptions
 foreach ($sub in $subscriptions) {
-    Write-Output "`nProcessing subscription: $sub"
-    az account set --subscription $sub
-    Write-Output "Set context to subscription $sub"
+    $subId = $sub.id
+    $subName = $sub.name
+    Write-Output "`nProcessing subscription: $subName"
+    az account set --subscription $subId
+    Write-Output "Set context to subscription $subName"
 
-    $subScope = "/subscriptions/$sub"
+    $subScope = "/subscriptions/$subId"
 
     # Process individual policy assignments (not part of initiatives)
     $assignments = Get-PolicyAssignmentsForScope -scope $subScope | Where-Object {
@@ -46,14 +48,14 @@ foreach ($sub in $subscriptions) {
     Write-Output "Found $($assignments.Count) policy assignments (not part of initiatives)"
 
     if ($assignments.Count -gt 0) {
-        $output.policies[$sub] = @{
+        $output.policies[$subName] = @{
             scope_type         = "subscription"
             scope_id           = $subScope
             policy_assignments = @()
         }
 
         foreach ($a in $assignments) {
-            $output.policies[$sub].policy_assignments += Get-FormattedAssignment -assignment $a
+            $output.policies[$subName].policy_assignments += Get-FormattedAssignment -assignment $a
         }
     }
 
@@ -62,14 +64,14 @@ foreach ($sub in $subscriptions) {
     Write-Output "Found $($initiatives.Count) initiative assignments"
 
     if ($initiatives.Count -gt 0) {
-        $output.initiatives[$sub] = @{
+        $output.initiatives[$subName] = @{
             scope_type         = "subscription"
             scope_id           = $subScope
             policy_assignments = @()
         }
 
         foreach ($i in $initiatives) {
-            $output.initiatives[$sub].policy_assignments += Get-FormattedAssignment -assignment $i
+            $output.initiatives[$subName].policy_assignments += Get-FormattedAssignment -assignment $i
         }
     }
 }

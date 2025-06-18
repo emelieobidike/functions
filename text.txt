@@ -33,12 +33,17 @@ $output = @{
 
 $subscriptions = Get-AllSubscriptions
 foreach ($sub in $subscriptions) {
+    Write-Output "`nProcessing subscription: $sub"
+    az account set --subscription $sub
+    Write-Output "Set context to subscription $sub"
+
     $subScope = "/subscriptions/$sub"
 
     # Process individual policy assignments (not part of initiatives)
     $assignments = Get-PolicyAssignmentsForScope -scope $subScope | Where-Object {
         $_.policyDefinitionId -notlike "*policySetDefinitions*"
     }
+    Write-Output "Found $($assignments.Count) policy assignments (not part of initiatives)"
 
     if ($assignments.Count -gt 0) {
         $output.policies[$sub] = @{
@@ -54,6 +59,7 @@ foreach ($sub in $subscriptions) {
 
     # Process initiatives
     $initiatives = Get-InitiativeAssignmentsForScope -scope $subScope
+    Write-Output "Found $($initiatives.Count) initiative assignments"
 
     if ($initiatives.Count -gt 0) {
         $output.initiatives[$sub] = @{
@@ -67,6 +73,8 @@ foreach ($sub in $subscriptions) {
         }
     }
 }
+
+Write-Output "`nFinished processing all subscriptions."
 
 $output | ConvertTo-Json -Depth 10 | Out-File -Encoding utf8 -FilePath $OutputFile
 Write-Output "Policy and initiative assignments exported to $OutputFile"

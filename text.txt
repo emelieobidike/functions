@@ -2,6 +2,8 @@ param (
     [string]$OutputFile = "exported_config.auto.tfvars.json"
 )
 
+# NOTE: Ensure the executing account has at least 'Policy Reader' or 'Reader' role on all target subscriptions.
+
 function Get-AllSubscriptions {
     az account list --query "[].{id:id, name:name}" -o json | ConvertFrom-Json
 }
@@ -41,8 +43,15 @@ foreach ($sub in $subscriptions) {
 
     $subScope = "/subscriptions/$subId"
 
+    # DEBUG: Show all raw policy assignments
+    $rawAssignments = Get-PolicyAssignmentsForScope -scope $subScope
+    Write-Output "DEBUG: Total assignments (raw): $($rawAssignments.Count)"
+    foreach ($ra in $rawAssignments) {
+        Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
+    }
+
     # Process individual policy assignments (not part of initiatives)
-    $assignments = Get-PolicyAssignmentsForScope -scope $subScope | Where-Object {
+    $assignments = $rawAssignments | Where-Object {
         $_.policyDefinitionId -notlike "*policySetDefinitions*"
     }
     Write-Output "Found $($assignments.Count) policy assignments (not part of initiatives)"
@@ -62,6 +71,9 @@ foreach ($sub in $subscriptions) {
     # Process initiatives
     $initiatives = Get-InitiativeAssignmentsForScope -scope $subScope
     Write-Output "Found $($initiatives.Count) initiative assignments"
+    foreach ($i in $initiatives) {
+        Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"
+    }
 
     if ($initiatives.Count -gt 0) {
         $output.initiatives[$subName] = @{

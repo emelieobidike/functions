@@ -4,6 +4,10 @@ param (
 
 # NOTE: Ensure the executing account has at least 'Policy Reader' or 'Reader' role on all target subscriptions.
 
+function Get-AllManagementGroups {
+    az account management-group list --query "[].name" -o tsv
+}
+
 function Get-AllSubscriptions {
     az account list --query "[].{id:id, name:name}" -o json | ConvertFrom-Json
 }
@@ -31,6 +35,52 @@ $output = @{
     policies    = @{}
     initiatives = @{}
     exemptions  = @{}
+}
+
+$mgroups = Get-AllManagementGroups
+foreach ($mg in $mgroups) {
+    $mgScope = "/providers/Microsoft.Management/managementGroups/$mg"
+    Write-Output "`nProcessing management group: $mg"
+
+    $mgRawAssignments = Get-PolicyAssignmentsForScope -scope $mgScope
+    Write-Output "DEBUG: Total MG assignments (raw): $($mgRawAssignments.Count)"
+    foreach ($ra in $mgRawAssignments) {
+        Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
+    }
+
+    $mgAssignments = $mgRawAssignments | Where-Object {
+        $_.policyDefinitionId -notlike "*policySetDefinitions*"
+    }
+    Write-Output "Found $($mgAssignments.Count) policy assignments at MG level"
+    if ($mgAssignments.Count -gt 0) {
+        $output.policies[$mg] = @{
+            scope_type         = "management_group"
+            scope_id           = $mgScope
+            policy_assignments = @()
+        }
+
+        foreach ($a in $mgAssignments) {
+            $output.policies[$mg].policy_assignments += Get-FormattedAssignment -assignment $a
+        }
+    }
+
+    $mgInitiatives = Get-InitiativeAssignmentsForScope -scope $mgScope
+    Write-Output "Found $($mgInitiatives.Count) initiative assignments at MG level"
+    foreach ($i in $mgInitiatives) {
+        Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"
+    }
+
+    if ($mgInitiatives.Count -gt 0) {
+        $output.initiatives[$mg] = @{
+            scope_type         = "management_group"
+            scope_id           = $mgScope
+            policy_assignments = @()
+        }
+
+        foreach ($i in $mgInitiatives) {
+            $output.initiatives[$mg].policy_assignments += Get-FormattedAssignment -assignment $i
+        }
+    }
 }
 
 $subscriptions = Get-AllSubscriptions

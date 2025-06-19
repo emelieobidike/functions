@@ -28,7 +28,13 @@ function Get-FormattedAssignment($assignment) {
     } else {
         # Fallback to default values from policy or initiative definition
         if ($assignment.policyDefinitionId -like "*policySetDefinitions*") {
-            $definition = az policy set-definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
+            try {
+                $definition = az policy set-definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
+            } catch {
+                $nameOnly = ($assignment.policyDefinitionId -split "/")[-1]
+                Write-Warning "Failed to fetch set-definition by ID, retrying with --name $nameOnly"
+                $definition = az policy set-definition show --name $nameOnly | ConvertFrom-Json
+            }
         } else {
             $definition = az policy definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
         }

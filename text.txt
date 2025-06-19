@@ -21,13 +21,35 @@ function Get-InitiativeAssignmentsForScope($scope) {
 }
 
 function Get-FormattedAssignment($assignment) {
+    $finalParams = @{}
+
+    if ($assignment.parameters) {
+        $finalParams = $assignment.parameters
+    } else {
+        # Fallback to default values from policy or initiative definition
+        if ($assignment.policyDefinitionId -like "*policySetDefinitions*") {
+            $definition = az policy set-definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
+        } else {
+            $definition = az policy definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
+        }
+
+        if ($definition.parameters) {
+            foreach ($key in $definition.parameters.PSObject.Properties.Name) {
+                $default = $definition.parameters.$key.defaultValue
+                if ($default) {
+                    $finalParams[$key] = @{ value = $default }
+                }
+            }
+        }
+    }
+
     return @{
         name                  = $assignment.name
         is_custom             = $false
         policy_definition_id  = $assignment.policyDefinitionId
         policy_key            = $null
         enforcement           = ($assignment.enforcementMode -eq "Default")
-        parameters            = if ($assignment.parameters) { $assignment.parameters | ConvertTo-Json -Compress } else { "{}" }
+        parameters            = $finalParams | ConvertTo-Json -Compress
     }
 }
 

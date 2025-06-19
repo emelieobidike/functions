@@ -48,9 +48,15 @@ foreach ($mg in $mgroups) {
         Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
     }
 
-    $mgAssignments = $mgRawAssignments | Where-Object {
-        $_.policyDefinitionId -notlike "*policySetDefinitions*"
+    # For management group individual policy assignments
+    $mgAssignments = @()
+    foreach ($ra in $mgRawAssignments) {
+        if ($ra.policyDefinitionId -notlike "*policySetDefinitions*") {
+            $detailed = az policy assignment show --name $ra.name --scope $mgScope | ConvertFrom-Json
+            $mgAssignments += $detailed
+        }
     }
+
     Write-Output "Found $($mgAssignments.Count) policy assignments at MG level"
     if ($mgAssignments.Count -gt 0) {
         $output.policies[$mg] = @{
@@ -64,7 +70,15 @@ foreach ($mg in $mgroups) {
         }
     }
 
-    $mgInitiatives = Get-InitiativeAssignmentsForScope -scope $mgScope
+    # For management group initiatives
+    $mgInitiatives = @()
+    foreach ($ra in $mgRawAssignments) {
+        if ($ra.policyDefinitionId -like "*policySetDefinitions*") {
+            $detailed = az policy assignment show --name $ra.name --scope $mgScope | ConvertFrom-Json
+            $mgInitiatives += $detailed
+        }
+    }
+
     Write-Output "Found $($mgInitiatives.Count) initiative assignments at MG level"
     foreach ($i in $mgInitiatives) {
         Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"
@@ -100,10 +114,15 @@ foreach ($sub in $subscriptions) {
         Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
     }
 
-    # Process individual policy assignments (not part of initiatives)
-    $assignments = $rawAssignments | Where-Object {
-        $_.policyDefinitionId -notlike "*policySetDefinitions*"
+    # For subscription individual policy assignments
+    $assignments = @()
+    foreach ($ra in $rawAssignments) {
+        if ($ra.policyDefinitionId -notlike "*policySetDefinitions*") {
+            $detailed = az policy assignment show --name $ra.name --scope $subScope | ConvertFrom-Json
+            $assignments += $detailed
+        }
     }
+
     Write-Output "Found $($assignments.Count) policy assignments (not part of initiatives)"
 
     if ($assignments.Count -gt 0) {
@@ -118,8 +137,15 @@ foreach ($sub in $subscriptions) {
         }
     }
 
-    # Process initiatives
-    $initiatives = Get-InitiativeAssignmentsForScope -scope $subScope
+    # For subscription initiatives
+    $initiatives = @()
+    foreach ($ra in $rawAssignments) {
+        if ($ra.policyDefinitionId -like "*policySetDefinitions*") {
+            $detailed = az policy assignment show --name $ra.name --scope $subScope | ConvertFrom-Json
+            $initiatives += $detailed
+        }
+    }
+
     Write-Output "Found $($initiatives.Count) initiative assignments"
     foreach ($i in $initiatives) {
         Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"

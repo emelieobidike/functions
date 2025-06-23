@@ -46,6 +46,7 @@ function Get-FormattedAssignment($assignment) {
 
     return @{
         name                  = $assignment.name
+        display_name          = $assignment.displayName
         is_custom             = $false
         policy_definition_id  = $assignment.policyDefinitionId
         policy_key            = $null

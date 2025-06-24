@@ -1,194 +1,53 @@
-param (
-    [string]$OutputFile = "exported_config.auto.tfvars.json"
-)
+🔐 Protect What Matters: Secrets Management in Azure Key Vault
 
-# NOTE: Ensure the executing account has at least 'Policy Reader' or 'Reader' role on all target subscriptions.
+As part of our ongoing commitment to secure development practices, it’s important we continue to reinforce the correct use of Azure Key Vault — a vital tool in our cloud security posture. Many of us use it daily, but not everyone may be aware of what should go into Key Vault, or why it’s crucial to set expiry dates on stored secrets. Here’s a quick guide to help you use it more effectively.
 
-function Get-AllManagementGroups {
-    az account management-group list --query "[].name" -o tsv
-}
+🧠 What Should Go into Azure Key Vault?
 
-function Get-AllSubscriptions {
-    az account list --query "[].{id:id, name:name}" -o json | ConvertFrom-Json
-}
+Azure Key Vault is designed to store and manage sensitive application data. Think of it as a digital safe. You should store:
+	•	API keys
+	•	Database connection strings
+	•	Service principals’ credentials
+	•	SAS tokens
+	•	Certificate private keys
+	•	Encryption keys
 
-function Get-PolicyAssignmentsForScope($scope) {
-    az policy assignment list --scope $scope | ConvertFrom-Json
-}
+⚠️ Connection strings absolutely qualify — especially if they contain usernames, passwords, or access tokens.
 
-function Get-InitiativeAssignmentsForScope($scope) {
-    az policy assignment list --scope $scope --query "[?policyDefinitionId.contains(@, 'policySetDefinitions')]" | ConvertFrom-Json
-}
+What shouldn’t go in Key Vault?
+	•	Plaintext configuration values
+	•	Static, non-sensitive metadata
+	•	Large files (use Blob Storage instead)
 
-function Get-FormattedAssignment($assignment) {
-    $finalParams = @{}
+If it can grant access or pose a risk if leaked — it belongs in the Key Vault.
 
-    if ($assignment.parameters) {
-        $finalParams = $assignment.parameters
-    } else {
-        # Fallback to default values from policy or initiative definition
-        if ($assignment.policyDefinitionId -like "*policySetDefinitions*") {
-            $nameOnly = ($assignment.policyDefinitionId -split "/")[-1]
-            $definition = az policy set-definition show --name $nameOnly | ConvertFrom-Json
-        } else {
-            $definition = az policy definition show --id $assignment.policyDefinitionId | ConvertFrom-Json
-        }
+⸻
 
-        if ($definition.parameters) {
-            foreach ($key in $definition.parameters.PSObject.Properties.Name) {
-                $default = $definition.parameters.$key.defaultValue
-                if ($default) {
-                    $finalParams[$key] = @{ value = $default }
-                }
-            }
-        }
-    }
+📆 Why Set Expiry Dates on Secrets?
 
-    return @{
-        name                  = $assignment.name
-        display_name          = $assignment.displayName
-        is_custom             = $false
-        policy_definition_id  = $assignment.policyDefinitionId
-        policy_key            = $null
-        enforcement           = ($assignment.enforcementMode -eq "Default")
-        parameters            = $finalParams | ConvertTo-Json -Compress
-    }
-}
+Here’s the thing: secrets don’t stay secret forever. Hardcoding them or keeping them indefinitely in Key Vault without expiration increases risk.
 
-$output = @{
-    policies    = @{}
-    initiatives = @{}
-    exemptions  = @{}
-}
+Benefits of Setting Expiry Dates:
+	•	✅ Reduces exposure window in case credentials are leaked
+	•	✅ Encourages regular rotation, which is a best practice
+	•	✅ Helps with compliance requirements (e.g., ISO, CIS benchmarks)
+	•	✅ Prevents the use of stale credentials in production
 
-$mgroups = Get-AllManagementGroups
-foreach ($mg in $mgroups) {
-    $mgScope = "/providers/Microsoft.Management/managementGroups/$mg"
-    Write-Output "`nProcessing management group: $mg"
+Risks of Not Using Expiry Dates:
+	•	❌ Secrets could be used by former employees or expired services
+	•	❌ You might not know which credentials are active or still in use
+	•	❌ Rotations get delayed or forgotten, weakening your security posture
 
-    $mgRawAssignments = Get-PolicyAssignmentsForScope -scope $mgScope
-    Write-Output "DEBUG: Total MG assignments (raw): $($mgRawAssignments.Count)"
-    foreach ($ra in $mgRawAssignments) {
-        Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
-    }
+⸻
 
-    # For management group individual policy assignments
-    $mgAssignments = @()
-    foreach ($ra in $mgRawAssignments) {
-        if ($ra.policyDefinitionId -notlike "*policySetDefinitions*") {
-            $detailed = az policy assignment show --name $ra.name --scope $mgScope | ConvertFrom-Json
-            $mgAssignments += $detailed
-        }
-    }
+✅ What You Can Do Today:
+	•	Review your Key Vaults and identify secrets with no expiry
+	•	Apply a consistent naming convention and tagging (e.g. Owner, Environment)
+	•	Implement Azure Policy to enforce secret expiration
+	•	Integrate secret rotation with CI/CD pipelines
 
-    Write-Output "Found $($mgAssignments.Count) policy assignments at MG level"
-    if ($mgAssignments.Count -gt 0) {
-        $output.policies[$mg] = @{
-            scope_type         = "management_group"
-            scope_id           = $mgScope
-            policy_assignments = @()
-        }
+⸻
 
-        foreach ($a in $mgAssignments) {
-            $output.policies[$mg].policy_assignments += Get-FormattedAssignment -assignment $a
-        }
-    }
+🔒 Key Vault is only secure if we use it properly. As custodians of our applications and services, we have a shared responsibility to protect the keys to our kingdom. Let’s stay ahead of threats by treating secrets like the sensitive assets they truly are.
 
-    # For management group initiatives
-    $mgInitiatives = @()
-    foreach ($ra in $mgRawAssignments) {
-        if ($ra.policyDefinitionId -like "*policySetDefinitions*") {
-            $detailed = az policy assignment show --name $ra.name --scope $mgScope | ConvertFrom-Json
-            $mgInitiatives += $detailed
-        }
-    }
-
-    Write-Output "Found $($mgInitiatives.Count) initiative assignments at MG level"
-    foreach ($i in $mgInitiatives) {
-        Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"
-    }
-
-    if ($mgInitiatives.Count -gt 0) {
-        $output.initiatives[$mg] = @{
-            scope_type         = "management_group"
-            scope_id           = $mgScope
-            policy_assignments = @()
-        }
-
-        foreach ($i in $mgInitiatives) {
-            $output.initiatives[$mg].policy_assignments += Get-FormattedAssignment -assignment $i
-        }
-    }
-}
-
-$subscriptions = Get-AllSubscriptions
-foreach ($sub in $subscriptions) {
-    $subId = $sub.id
-    $subName = $sub.name
-    Write-Output "`nProcessing subscription: $subName"
-    az account set --subscription $subId
-    Write-Output "Set context to subscription $subName"
-
-    $subScope = "/subscriptions/$subId"
-
-    # DEBUG: Show all raw policy assignments
-    $rawAssignments = Get-PolicyAssignmentsForScope -scope $subScope
-    Write-Output "DEBUG: Total assignments (raw): $($rawAssignments.Count)"
-    foreach ($ra in $rawAssignments) {
-        Write-Output "DEBUG: $($ra.name) - $($ra.policyDefinitionId)"
-    }
-
-    # For subscription individual policy assignments
-    $assignments = @()
-    foreach ($ra in $rawAssignments) {
-        if ($ra.policyDefinitionId -notlike "*policySetDefinitions*") {
-            $detailed = az policy assignment show --name $ra.name --scope $subScope | ConvertFrom-Json
-            $assignments += $detailed
-        }
-    }
-
-    Write-Output "Found $($assignments.Count) policy assignments (not part of initiatives)"
-
-    if ($assignments.Count -gt 0) {
-        $output.policies[$subName] = @{
-            scope_type         = "subscription"
-            scope_id           = $subScope
-            policy_assignments = @()
-        }
-
-        foreach ($a in $assignments) {
-            $output.policies[$subName].policy_assignments += Get-FormattedAssignment -assignment $a
-        }
-    }
-
-    # For subscription initiatives
-    $initiatives = @()
-    foreach ($ra in $rawAssignments) {
-        if ($ra.policyDefinitionId -like "*policySetDefinitions*") {
-            $detailed = az policy assignment show --name $ra.name --scope $subScope | ConvertFrom-Json
-            $initiatives += $detailed
-        }
-    }
-
-    Write-Output "Found $($initiatives.Count) initiative assignments"
-    foreach ($i in $initiatives) {
-        Write-Output "INITIATIVE DEBUG: $($i.name) - $($i.policyDefinitionId)"
-    }
-
-    if ($initiatives.Count -gt 0) {
-        $output.initiatives[$subName] = @{
-            scope_type         = "subscription"
-            scope_id           = $subScope
-            policy_assignments = @()
-        }
-
-        foreach ($i in $initiatives) {
-            $output.initiatives[$subName].policy_assignments += Get-FormattedAssignment -assignment $i
-        }
-    }
-}
-
-Write-Output "`nFinished processing all subscriptions."
-
-$output | ConvertTo-Json -Depth 10 | Out-File -Encoding utf8 -FilePath $OutputFile
-Write-Output "Policy and initiative assignments exported to $OutputFile"
+If you need help reviewing your Key Vault usage or applying policies, feel free to reach out to the cloud engineering team.

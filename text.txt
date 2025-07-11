@@ -1,53 +1,29 @@
-🔐 Protect What Matters: Secrets Management in Azure Key Vault
-
+Secrets Management in Azure Key Vault
 As part of our ongoing commitment to secure development practices, it’s important we continue to reinforce the correct use of Azure Key Vault — a vital tool in our cloud security posture. Many of us use it daily, but not everyone may be aware of what should go into Key Vault, or why it’s crucial to set expiry dates on stored secrets. Here’s a quick guide to help you use it more effectively.
-
-🧠 What Should Go into Azure Key Vault?
-
+What Should Go into Azure Key Vault?
 Azure Key Vault is designed to store and manage sensitive application data. Think of it as a digital safe. You should store:
-	•	API keys
-	•	Database connection strings
-	•	Service principals’ credentials
-	•	SAS tokens
-	•	Certificate private keys
-	•	Encryption keys
-
-⚠️ Connection strings absolutely qualify — especially if they contain usernames, passwords, or access tokens.
-
+•	API keys
+•	Database connection strings
+•	Service principals’ credentials
+•	SAS tokens
+•	Certificate private keys
+•	Encryption keys
 What shouldn’t go in Key Vault?
-	•	Plaintext configuration values
-	•	Static, non-sensitive metadata
-	•	Large files (use Blob Storage instead)
-
+•	Plaintext configuration values
+•	Static, non-sensitive metadata
 If it can grant access or pose a risk if leaked — it belongs in the Key Vault.
-
-⸻
-
-📆 Why Set Expiry Dates on Secrets?
-
-Here’s the thing: secrets don’t stay secret forever. Hardcoding them or keeping them indefinitely in Key Vault without expiration increases risk.
-
+Why Set Expiry Dates on Secrets?
+Secrets don’t stay secret forever. Hardcoding them or keeping them indefinitely in Key Vault without expiration increases risk.
 Benefits of Setting Expiry Dates:
-	•	✅ Reduces exposure window in case credentials are leaked
-	•	✅ Encourages regular rotation, which is a best practice
-	•	✅ Helps with compliance requirements (e.g., ISO, CIS benchmarks)
-	•	✅ Prevents the use of stale credentials in production
-
+•	Reduces exposure window in case credentials are leaked
+•	Encourages regular rotation, which is a best practice
+•	Helps with compliance requirements 
+•	Prevents the use of stale credentials in production
 Risks of Not Using Expiry Dates:
-	•	❌ Secrets could be used by former employees or expired services
-	•	❌ You might not know which credentials are active or still in use
-	•	❌ Rotations get delayed or forgotten, weakening your security posture
+•	Secrets could be used by former employees or expired services
+•	You might not know which credentials are active or still in use
+•	Rotations get delayed or forgotten, weakening your security posture
+What You Can Do Today:
+A Key Vault is only secure if we use it properly. As custodians of our applications and services, we have a shared responsibility to protect the keys to our kingdom. Let’s stay ahead of threats by treating secrets like the sensitive assets they truly are.
+If you need help reviewing your Key Vault usage, feel free to reach out to the cloud engineering team.
 
-⸻
-
-✅ What You Can Do Today:
-	•	Review your Key Vaults and identify secrets with no expiry
-	•	Apply a consistent naming convention and tagging (e.g. Owner, Environment)
-	•	Implement Azure Policy to enforce secret expiration
-	•	Integrate secret rotation with CI/CD pipelines
-
-⸻
-
-🔒 Key Vault is only secure if we use it properly. As custodians of our applications and services, we have a shared responsibility to protect the keys to our kingdom. Let’s stay ahead of threats by treating secrets like the sensitive assets they truly are.
-
-If you need help reviewing your Key Vault usage or applying policies, feel free to reach out to the cloud engineering team.

@@ -1,28 +1,49 @@
-$managementGroupId = "<YourManagementGroupId>"
-$policyAssignmentName = "<PolicyAssignmentName>"
-$output = @()
+Justification
 
-# Get all subscriptions under the management group
-$subscriptions = Get-AzSubscription | Where-Object { $_.Id -in (Get-AzManagementGroupSubscription -GroupId $managementGroupId).Id }
+This change is required to enable NvisionX to perform delete operations on files stored in OneDrive and SharePoint as part of its automated workflow testing and future data management functionality.
+Currently, the NvisionX Azure app has limited permissions that prevent file deletion, which blocks validation of the delete workflow capabilities.
+Adding the Files.ReadWrite.All permission will allow complete end-to-end testing of the NvisionX integration with Microsoft Graph and ensure the solution can manage data lifecycle processes effectively.
 
-foreach ($sub in $subscriptions) {
-    Set-AzContext -SubscriptionId $sub.Id
+⸻
 
-    $exemptions = Get-AzPolicyExemption | Where-Object { $_.PolicyAssignmentId -like "*$policyAssignmentName*" }
+Implementation Plan
+	1.	Access Azure Portal → Azure Active Directory → App Registrations.
+	2.	Locate the NvisionX application registration.
+	3.	Navigate to API Permissions → Add a permission → Microsoft Graph → Application permissions.
+	4.	Add Files.ReadWrite.All.
+	5.	Click Add permissions and then Grant admin consent for the tenant.
+	6.	Validate that the new permission appears as “Granted for <tenant name>.”
+	7.	Notify the NvisionX support team once complete.
+	8.	Perform a controlled test to confirm that NvisionX can delete a test file in OneDrive/SharePoint.
+	9.	Document the test results and attach proof to the change record.
 
-    foreach ($ex in $exemptions) {
-        if ($ex.ExpiresOn -and $ex.ExpiresOn -lt (Get-Date)) {
-            $output += [PSCustomObject]@{
-                SubscriptionId = $sub.Id
-                Name           = $ex.Name
-                Scope          = $ex.Scope
-                ExpiresOn      = $ex.ExpiresOn
-                PolicyAssignmentId = $ex.PolicyAssignmentId
-            }
-        }
-    }
-}
+Responsible team: Cloud/Identity Administration Team
+Communication: No user impact announcement required as this is an internal service app change.
 
-# Export to CSV
-$output | Export-Csv -Path "./expired-policy-exemptions.csv" -NoTypeInformation
-Write-Host "Exported expired exemptions to expired-policy-exemptions.csv"
+⸻
+
+Risk and Impact Analysis
+	•	Impact scope: Low — change only affects the NvisionX service account and its app registration within Azure AD.
+	•	Users affected: None directly; no production user data or access will be impacted.
+	•	System impact: Minimal. The change extends the app’s Microsoft Graph API permissions but does not alter existing ones.
+	•	Downtime expected: None.
+	•	Risks: Over-provisioning risk if permissions are misconfigured, which could allow broader file access than required. Mitigation will involve verifying the permission scope and confirming the app operates only within the approved OneDrive and SharePoint targets.
+
+⸻
+
+Backout Plan
+
+If the change causes unexpected access behavior or elevated privileges beyond intended scope:
+	1.	Access the NvisionX App Registration in Azure AD.
+	2.	Remove the Files.ReadWrite.All permission from the API Permissions list.
+	3.	Revoke admin consent for the permission.
+	4.	Reconfirm previous permissions remain intact.
+Rollback can be completed within 10–15 minutes with no service disruption.
+
+⸻
+
+Test Plan
+	1.	After admin consent is granted, initiate a delete test using the NvisionX workflow against a designated test file in OneDrive/SharePoint.
+	2.	Verify successful deletion and confirm via logs or audit entries.
+	3.	Validate that read/write operations for other permissions continue functioning normally.
+	4.	Capture screenshots and logs as test evidence and attach them to the change record.

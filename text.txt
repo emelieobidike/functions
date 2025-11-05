@@ -1,22 +1,35 @@
-Change Title
+Impact to Service and End Users
 
-Enforce Purge Protection and Soft Delete on New Azure Key Vaults via Policy
-
-⸻
-
-Description
-
-This change will deploy an Azure Policy that denies the creation of new Key Vault resources unless both soft delete and purge protection are enabled. The policy ensures compliance with organizational data protection and recovery standards by preventing accidental or malicious deletion of critical secrets and keys.
+There is no direct impact to existing Key Vaults or running services.
+After this change, users and automation deploying new Key Vaults will be denied creation if they do not have soft delete and purge protection enabled.
+This may require teams to update their deployment templates or scripts to include the required settings. Otherwise, Key Vault creation operations will fail with a policy compliance error.
 
 ⸻
 
-Risk
-
-Low.
-The policy only affects new Key Vault deployments and does not modify existing resources. However, there is a minor risk that deployment pipelines or automation scripts that do not explicitly enable soft delete and purge protection may fail when creating new Key Vaults.
+Implementation Steps
+	1.	Review and confirm scope (target management group or subscriptions).
+	2.	Create or update the Azure Policy definition to deny Key Vault creation when soft delete or purge protection are not enabled.
+	3.	Assign the policy at the management group or subscription level with enforcement mode set to enabled.
+	4.	Validate policy assignment propagation.
+	5.	Notify relevant resource owners and deployment teams of the new enforcement behavior.
+	6.	Monitor Azure Policy compliance results and activity logs post-deployment.
 
 ⸻
 
-Why is this change necessary
+Testing Plan
+	•	Pre-deployment testing: The policy will first be deployed in a non-production subscription to confirm it correctly denies creation of non-compliant Key Vaults and allows compliant ones.
+	•	Post-deployment validation: After production rollout, a test deployment of a Key Vault with the required configurations will be performed to ensure no unexpected denials.
+	•	Compliance view in Azure Policy will be reviewed to confirm proper operation and visibility.
 
-Enabling purge protection and soft delete is a security and compliance requirement that ensures sensitive data stored in Key Vaults cannot be permanently deleted without retention safeguards. This policy enforces organizational best practices for data recovery, minimizes risk of data loss, and aligns with compliance frameworks that require protection against accidental or malicious deletion.
+⸻
+
+Backout Plan
+	•	If issues occur (e.g., legitimate Key Vault deployments are being blocked), the policy assignment can be temporarily disabled or removed from the affected scope.
+	•	Rollback will restore the ability to create Key Vaults without restriction while further investigation or remediation is performed.
+	•	Document and communicate rollback action to affected teams.
+
+⸻
+
+Post-Change Actions for End Users
+	•	End users or deployment teams will need to ensure all new Key Vaults have soft delete and purge protection enabled in their templates, scripts, or ARM/Bicep definitions.
+	•	No manual action is required for existing Key Vaults.

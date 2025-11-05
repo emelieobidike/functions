@@ -1,49 +1,72 @@
-Justification
+# ================================
+# Script: Get-KeyVaultOwners.ps1
+# Purpose: Export Key Vaults and their PrimaryContact owners from multiple subscriptions
+# ================================
 
-This change is required to enable NvisionX to perform delete operations on files stored in OneDrive and SharePoint as part of its automated workflow testing and future data management functionality.
-Currently, the NvisionX Azure app has limited permissions that prevent file deletion, which blocks validation of the delete workflow capabilities.
-Adding the Files.ReadWrite.All permission will allow complete end-to-end testing of the NvisionX integration with Microsoft Graph and ensure the solution can manage data lifecycle processes effectively.
+# List of subscriptions to check
+$subscriptions = @(
+    "sub1-guid-or-name",
+    "sub2-guid-or-name",
+    "sub3-guid-or-name",
+    "sub4-guid-or-name",
+    "sub5-guid-or-name",
+    "sub6-guid-or-name"
+)
 
-⸻
+# Output file
+$outputFile = "KeyVaultOwners.csv"
 
-Implementation Plan
-	1.	Access Azure Portal → Azure Active Directory → App Registrations.
-	2.	Locate the NvisionX application registration.
-	3.	Navigate to API Permissions → Add a permission → Microsoft Graph → Application permissions.
-	4.	Add Files.ReadWrite.All.
-	5.	Click Add permissions and then Grant admin consent for the tenant.
-	6.	Validate that the new permission appears as “Granted for <tenant name>.”
-	7.	Notify the NvisionX support team once complete.
-	8.	Perform a controlled test to confirm that NvisionX can delete a test file in OneDrive/SharePoint.
-	9.	Document the test results and attach proof to the change record.
+# Empty array to store results
+$results = @()
 
-Responsible team: Cloud/Identity Administration Team
-Communication: No user impact announcement required as this is an internal service app change.
+# Ensure Az module is available
+if (-not (Get-Module -ListAvailable -Name Az.Accounts)) {
+    Write-Host "Installing Az module..."
+    Install-Module Az -Scope CurrentUser -Force
+}
 
-⸻
+Import-Module Az.Accounts
+Import-Module Az.KeyVault
+Import-Module Az.Resources
 
-Risk and Impact Analysis
-	•	Impact scope: Low — change only affects the NvisionX service account and its app registration within Azure AD.
-	•	Users affected: None directly; no production user data or access will be impacted.
-	•	System impact: Minimal. The change extends the app’s Microsoft Graph API permissions but does not alter existing ones.
-	•	Downtime expected: None.
-	•	Risks: Over-provisioning risk if permissions are misconfigured, which could allow broader file access than required. Mitigation will involve verifying the permission scope and confirming the app operates only within the approved OneDrive and SharePoint targets.
+# Login (only once)
+Connect-AzAccount -ErrorAction Stop
 
-⸻
+foreach ($sub in $subscriptions) {
+    Write-Host "Processing subscription: $sub" -ForegroundColor Cyan
+    Set-AzContext -Subscription $sub | Out-Null
 
-Backout Plan
+    # Get all Key Vaults
+    $keyVaults = Get-AzKeyVault
 
-If the change causes unexpected access behavior or elevated privileges beyond intended scope:
-	1.	Access the NvisionX App Registration in Azure AD.
-	2.	Remove the Files.ReadWrite.All permission from the API Permissions list.
-	3.	Revoke admin consent for the permission.
-	4.	Reconfirm previous permissions remain intact.
-Rollback can be completed within 10–15 minutes with no service disruption.
+    foreach ($kv in $keyVaults) {
+        $owner = $null
 
-⸻
+        # Try to get PrimaryContact tag from Key Vault
+        if ($kv.Tags.ContainsKey("PrimaryContact")) {
+            $owner = $kv.Tags["PrimaryContact"]
+        } else {
+            # Get the Resource Group and check for tag there
+            $rg = Get-AzResourceGroup -Name $kv.ResourceGroupName -ErrorAction SilentlyContinue
+            if ($rg -and $rg.Tags.ContainsKey("PrimaryContact")) {
+                $owner = $rg.Tags["PrimaryContact"]
+            } else {
+                $owner = "Not Defined"
+            }
+        }
 
-Test Plan
-	1.	After admin consent is granted, initiate a delete test using the NvisionX workflow against a designated test file in OneDrive/SharePoint.
-	2.	Verify successful deletion and confirm via logs or audit entries.
-	3.	Validate that read/write operations for other permissions continue functioning normally.
-	4.	Capture screenshots and logs as test evidence and attach them to the change record.
+        # Collect info
+        $results += [PSCustomObject]@{
+            Subscription    = $sub
+            ResourceGroup   = $kv.ResourceGroupName
+            KeyVaultName    = $kv.VaultName
+            Location        = $kv.Location
+            Owner           = $owner
+        }
+    }
+}
+
+# Export results to CSV
+$results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+
+Write-Host "✅ Export complete. File saved to: $outputFile" -ForegroundColor Green

@@ -1,72 +1,22 @@
-# ================================
-# Script: Get-KeyVaultOwners.ps1
-# Purpose: Export Key Vaults and their PrimaryContact owners from multiple subscriptions
-# ================================
+Change Title
 
-# List of subscriptions to check
-$subscriptions = @(
-    "sub1-guid-or-name",
-    "sub2-guid-or-name",
-    "sub3-guid-or-name",
-    "sub4-guid-or-name",
-    "sub5-guid-or-name",
-    "sub6-guid-or-name"
-)
+Enforce Purge Protection and Soft Delete on New Azure Key Vaults via Policy
 
-# Output file
-$outputFile = "KeyVaultOwners.csv"
+⸻
 
-# Empty array to store results
-$results = @()
+Description
 
-# Ensure Az module is available
-if (-not (Get-Module -ListAvailable -Name Az.Accounts)) {
-    Write-Host "Installing Az module..."
-    Install-Module Az -Scope CurrentUser -Force
-}
+This change will deploy an Azure Policy that denies the creation of new Key Vault resources unless both soft delete and purge protection are enabled. The policy ensures compliance with organizational data protection and recovery standards by preventing accidental or malicious deletion of critical secrets and keys.
 
-Import-Module Az.Accounts
-Import-Module Az.KeyVault
-Import-Module Az.Resources
+⸻
 
-# Login (only once)
-Connect-AzAccount -ErrorAction Stop
+Risk
 
-foreach ($sub in $subscriptions) {
-    Write-Host "Processing subscription: $sub" -ForegroundColor Cyan
-    Set-AzContext -Subscription $sub | Out-Null
+Low.
+The policy only affects new Key Vault deployments and does not modify existing resources. However, there is a minor risk that deployment pipelines or automation scripts that do not explicitly enable soft delete and purge protection may fail when creating new Key Vaults.
 
-    # Get all Key Vaults
-    $keyVaults = Get-AzKeyVault
+⸻
 
-    foreach ($kv in $keyVaults) {
-        $owner = $null
+Why is this change necessary
 
-        # Try to get PrimaryContact tag from Key Vault
-        if ($kv.Tags.ContainsKey("PrimaryContact")) {
-            $owner = $kv.Tags["PrimaryContact"]
-        } else {
-            # Get the Resource Group and check for tag there
-            $rg = Get-AzResourceGroup -Name $kv.ResourceGroupName -ErrorAction SilentlyContinue
-            if ($rg -and $rg.Tags.ContainsKey("PrimaryContact")) {
-                $owner = $rg.Tags["PrimaryContact"]
-            } else {
-                $owner = "Not Defined"
-            }
-        }
-
-        # Collect info
-        $results += [PSCustomObject]@{
-            Subscription    = $sub
-            ResourceGroup   = $kv.ResourceGroupName
-            KeyVaultName    = $kv.VaultName
-            Location        = $kv.Location
-            Owner           = $owner
-        }
-    }
-}
-
-# Export results to CSV
-$results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
-
-Write-Host "✅ Export complete. File saved to: $outputFile" -ForegroundColor Green
+Enabling purge protection and soft delete is a security and compliance requirement that ensures sensitive data stored in Key Vaults cannot be permanently deleted without retention safeguards. This policy enforces organizational best practices for data recovery, minimizes risk of data loss, and aligns with compliance frameworks that require protection against accidental or malicious deletion.

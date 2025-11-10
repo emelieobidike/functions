@@ -1,35 +1,51 @@
-Impact to Service and End Users
+# Connect to Azure
+Connect-AzAccount
 
-There is no direct impact to existing Key Vaults or running services.
-After this change, users and automation deploying new Key Vaults will be denied creation if they do not have soft delete and purge protection enabled.
-This may require teams to update their deployment templates or scripts to include the required settings. Otherwise, Key Vault creation operations will fail with a policy compliance error.
+# Get all subscriptions
+$subscriptions = Get-AzSubscription
 
-⸻
+# Prepare results array
+$results = @()
 
-Implementation Steps
-	1.	Review and confirm scope (target management group or subscriptions).
-	2.	Create or update the Azure Policy definition to deny Key Vault creation when soft delete or purge protection are not enabled.
-	3.	Assign the policy at the management group or subscription level with enforcement mode set to enabled.
-	4.	Validate policy assignment propagation.
-	5.	Notify relevant resource owners and deployment teams of the new enforcement behavior.
-	6.	Monitor Azure Policy compliance results and activity logs post-deployment.
+foreach ($sub in $subscriptions) {
+    Write-Host "Processing subscription: $($sub.Name)" -ForegroundColor Cyan
+    Set-AzContext -SubscriptionId $sub.Id
 
-⸻
+    # Get all storage accounts in this subscription
+    $storageAccounts = Get-AzStorageAccount
 
-Testing Plan
-	•	Pre-deployment testing: The policy will first be deployed in a non-production subscription to confirm it correctly denies creation of non-compliant Key Vaults and allows compliant ones.
-	•	Post-deployment validation: After production rollout, a test deployment of a Key Vault with the required configurations will be performed to ensure no unexpected denials.
-	•	Compliance view in Azure Policy will be reviewed to confirm proper operation and visibility.
+    foreach ($sa in $storageAccounts) {
+        Write-Host "  Checking storage account: $($sa.StorageAccountName)" -ForegroundColor Yellow
 
-⸻
+        # Get the context for this storage account
+        $ctx = $sa.Context
 
-Backout Plan
-	•	If issues occur (e.g., legitimate Key Vault deployments are being blocked), the policy assignment can be temporarily disabled or removed from the affected scope.
-	•	Rollback will restore the ability to create Key Vaults without restriction while further investigation or remediation is performed.
-	•	Document and communicate rollback action to affected teams.
+        # Initialize blob counter
+        $blobCount = 0
 
-⸻
+        # Get all containers in the storage account
+        $containers = Get-AzStorageContainer -Context $ctx
 
-Post-Change Actions for End Users
-	•	End users or deployment teams will need to ensure all new Key Vaults have soft delete and purge protection enabled in their templates, scripts, or ARM/Bicep definitions.
-	•	No manual action is required for existing Key Vaults.
+        foreach ($container in $containers) {
+            # List blobs in the container and count them
+            $blobs = Get-AzStorageBlob -Container $container.Name -Context $ctx
+            $blobCount += $blobs.Count
+        }
+
+        # Add to results
+        $results += [PSCustomObject]@{
+            SubscriptionName   = $sub.Name
+            ResourceGroupName  = $sa.ResourceGroupName
+            StorageAccountName = $sa.StorageAccountName
+            BlobCount          = $blobCount
+        }
+    }
+}
+
+# Display summary
+$results | Format-Table -AutoSize
+
+# Optionally export to CSV
+$results | Export-Csv -Path "./BlobCountSummary.csv" -NoTypeInformation
+
+Write-Host "✅ Blob count completed. Results exported to BlobCountSummary.csv"

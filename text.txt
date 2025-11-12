@@ -1,51 +1,69 @@
-# Connect to Azure
-Connect-AzAccount
+🔹 Change Title
 
-# Get all subscriptions
-$subscriptions = Get-AzSubscription
+Integrate SNOWFLAKE_SPROUTSOCIAL_ANALYST Group with Snowflake via SCIM Provisioning
 
-# Prepare results array
-$results = @()
+⸻
 
-foreach ($sub in $subscriptions) {
-    Write-Host "Processing subscription: $($sub.Name)" -ForegroundColor Cyan
-    Set-AzContext -SubscriptionId $sub.Id
+🔹 Change Description
 
-    # Get all storage accounts in this subscription
-    $storageAccounts = Get-AzStorageAccount
+A new Active Directory security group named SNOWFLAKE_SPROUTSOCIAL_ANALYST has been created and synchronized to Microsoft Entra ID.
+This change involves assigning the group to the Snowflake Enterprise Application in Entra to enable automatic provisioning through SCIM (System for Cross-domain Identity Management).
 
-    foreach ($sa in $storageAccounts) {
-        Write-Host "  Checking storage account: $($sa.StorageAccountName)" -ForegroundColor Yellow
+The integration ensures that user accounts and access memberships within this group are automatically provisioned and deprovisioned in Snowflake, aligning with organizational identity lifecycle management policies.
 
-        # Get the context for this storage account
-        $ctx = $sa.Context
+The S2SNOWFLAKE_POWERBI service account will also be included in the configuration as requested. Once completed, the task will be reassigned to the Cloud Services team for post-integration validation.
 
-        # Initialize blob counter
-        $blobCount = 0
+🔹 Justification
 
-        # Get all containers in the storage account
-        $containers = Get-AzStorageContainer -Context $ctx
+This change is required to enable automated user provisioning and lifecycle management between Microsoft Entra ID and Snowflake for the newly created SNOWFLAKE_SPROUTSOCIAL_ANALYST security group.
 
-        foreach ($container in $containers) {
-            # List blobs in the container and count them
-            $blobs = Get-AzStorageBlob -Container $container.Name -Context $ctx
-            $blobCount += $blobs.Count
-        }
+Enabling SCIM integration ensures that group membership changes in Active Directory and Entra ID are automatically reflected in Snowflake, reducing manual administration, eliminating access discrepancies, and improving security compliance.
 
-        # Add to results
-        $results += [PSCustomObject]@{
-            SubscriptionName   = $sub.Name
-            ResourceGroupName  = $sa.ResourceGroupName
-            StorageAccountName = $sa.StorageAccountName
-            BlobCount          = $blobCount
-        }
-    }
-}
+This integration aligns with corporate identity governance policies and supports least privilege access by ensuring only authorized users can access Sprout Social data sources in Snowflake.
 
-# Display summary
-$results | Format-Table -AutoSize
+⸻
 
-# Optionally export to CSV
-$results | Export-Csv -Path "./BlobCountSummary.csv" -NoTypeInformation
+🔹 Implementation Plan
 
-Write-Host "✅ Blob count completed. Results exported to BlobCountSummary.csv"
+	1.	Confirm the SNOWFLAKE_SPROUTSOCIAL_ANALYST security group has successfully synchronized from on-prem AD to Microsoft Entra ID.
+	2.	In Entra, open the Snowflake Enterprise Application and verify existing SCIM provisioning configuration.
+	3.	Assign the SNOWFLAKE_SPROUTSOCIAL_ANALYST group to the Snowflake application under Users and Groups.
+	4.	Add the S2SNOWFLAKE_POWERBI service account as part of the same configuration.
+	5.	Perform a provisioning cycle sync to ensure the group and users are replicated to Snowflake.
+	6.	Validate provisioning success from the Snowflake SCIM integration logs.
+	7.	Notify Cloud Services and Data Analytics teams once the integration is confirmed.
+
+Implementation by: Cloud Services team
+Communication: Internal technical notification via Microsoft Teams and ServiceNow comments. No user-facing communication required.
+
+⸻
+
+🔹 Risk and Impact Analysis
+
+	•	Users/Groups Affected: Limited to members of the SNOWFLAKE_SPROUTSOCIAL_ANALYST group.
+	•	Impact if Successful: Users in the group will automatically gain access to the relevant Sprout Social datasets in Snowflake without manual provisioning.
+	•	Impact if Unsuccessful: Users may not be able to access Sprout Social data in Snowflake. No other systems will be impacted.
+	•	Downtime: None. The change is configuration-based and performed in Entra; provisioning occurs asynchronously.
+	•	Workaround: Manual account creation in Snowflake can be performed if automated provisioning fails.
+
+⸻
+
+🔹 Backout Plan
+
+	•	If provisioning fails or causes incorrect user assignments, the group assignment will be removed from the Snowflake Enterprise Application in Entra.
+	•	This immediately halts further SCIM sync activity for that group.
+	•	Changes can be reverted by removing the group mapping and clearing the provisioning cache in Entra.
+	•	Rollback time: Approximately 10–15 minutes.
+	•	No downstream impact expected beyond Snowflake user access.
+
+⸻
+
+🔹 Test Plan
+
+	•	The SCIM integration between Entra and Snowflake is an established, tested configuration.
+	•	This specific change will be verified by manually triggering a provisioning cycle and confirming that the SNOWFLAKE_SPROUTSOCIAL_ANALYST group and its members appear in Snowflake under the correct roles.
+	•	Validation includes confirming that:
+	1.	The group exists in Snowflake post-sync.
+	2.	Assigned users have expected access rights.
+	3.	No unrelated user objects were affected.
+	•	Evidence (screenshots or provisioning logs) will be attached to the change record once validation is complete.

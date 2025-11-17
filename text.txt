@@ -260,62 +260,67 @@ Write-Host " - Enable monitoring/diagnostics/backup per policy."
 
 
 {
-    "$schema": "http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-      "subnetName": {
-        "type": "string"
-      },
-      "virtualNetworkId": {
-        "type": "string"
-      },
-      "virtualMachineName": {
-        "type": "string"
-      },
-      "adminPassword": {
-        "type": "secureString"
+  "$schema": "http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "subnetName": {
+      "type": "string"
+    },
+    "virtualNetworkId": {
+      "type": "string"
+    },
+    "virtualMachineName": {
+      "type": "string"
+    },
+    "adminPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key for the Linux admin user"
+      }
+    }
+  },
+  "variables": {
+    "vnetId": "[parameters('virtualNetworkId')]",
+    "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]"
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('virtualMachineName'), '-eth0')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2021-03-01",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              },
+              "privateIPAllocationMethod": "Dynamic"
+            }
+          }
+        ]
       }
     },
-    "variables": {
-      "vnetId": "[parameters('virtualNetworkId')]",
-      "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]"
-    },
-    "resources": [
-      {
-        "name": "[concat(parameters('virtualMachineName'), '-eth0')]",
-        "type": "Microsoft.Network/networkInterfaces",
-        "apiVersion": "2021-03-01",
-        "location": "[resourceGroup().location]",
-        "dependsOn": [],
-        "properties": {
-          "ipConfigurations": [
-            {
-              "name": "ipconfig1",
-              "properties": {
-                "subnet": {
-                  "id": "[variables('subnetRef')]"
-                },
-                "privateIPAllocationMethod": "Dynamic"
-              }
-            }
-          ]
-        }
-      },
-     {
-        "name": "[parameters('virtualMachineName')]",
-        "type": "Microsoft.Compute/virtualMachines",
-        "apiVersion": "2021-07-01",
-        "location": "[resourceGroup().location]",
-        "dependsOn": [
-          "[concat('Microsoft.Network/networkInterfaces/', parameters('virtualMachineName'), '-eth0')]"
-        ],
+    {
+      "name": "[parameters('virtualMachineName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-07-01",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', parameters('virtualMachineName'), '-eth0')]"
+      ],
       "properties": {
         "hardwareProfile": {
           "vmSize": "Standard_B4ms"
         },
         "storageProfile": {
           "imageReference": {
-              "id": "/subscriptions/831242cd-4f5a-4da5-a775-2325ac01fe11/resourceGroups/rg_EUS2_CloudServices/providers/Microsoft.Compute/galleries/acg_eus2_ImageGallery/images/WS2022Std/versions/10.20348.2461"
+            "publisher": "RedHat",
+            "offer": "RHEL",
+            "sku": "9_4",
+            "version": "latest"
           },
           "osDisk": {
             "name": "[concat(parameters('virtualMachineName'),'-lun0')]",
@@ -342,7 +347,7 @@ Write-Host " - Enable monitoring/diagnostics/backup per policy."
             {
               "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachineName'), '-eth0'))]",
               "properties": {
-                  "deleteOption": "Delete"
+                "deleteOption": "Delete"
               }
             }
           ]
@@ -350,31 +355,30 @@ Write-Host " - Enable monitoring/diagnostics/backup per policy."
         "osProfile": {
           "computerName": "[substring(parameters('virtualMachineName'),8,add(length(parameters('virtualMachineName')),-8))]",
           "adminUsername": "locala",
-          "adminPassword": "[parameters('adminPassword')]",
-          "windowsConfiguration": {
-            "enableAutomaticUpdates": false,
-            "provisionVmAgent": true,
-            "patchSettings": {
-              "enableHotpatching": false,
-              "patchMode": "Manual"
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "/home/locala/.ssh/authorized_keys",
+                  "keyData": "[parameters('adminPublicKey')]"
+                }
+              ]
             }
           }
         },
-        "licenseType": "Windows_Server",
         "diagnosticsProfile": {
           "bootDiagnostics": {
             "enabled": true
           }
         }
-        
       }
-      
-      }
-    ],
-    "outputs": {
-          "adminUsername":{
-              "type": "String",
-              "value": "locala"
-          }
+    }
+  ],
+  "outputs": {
+    "adminUsername": {
+      "type": "String",
+      "value": "locala"
     }
   }
+}

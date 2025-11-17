@@ -256,3 +256,125 @@ Write-Host " - Harden NSGs (change JumpBox source to your public IP, restrict ma
 Write-Host " - Enable monitoring/diagnostics/backup per policy."
 
 # End of script
+
+
+
+{
+    "$schema": "http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "subnetName": {
+        "type": "string"
+      },
+      "virtualNetworkId": {
+        "type": "string"
+      },
+      "virtualMachineName": {
+        "type": "string"
+      },
+      "adminPassword": {
+        "type": "secureString"
+      }
+    },
+    "variables": {
+      "vnetId": "[parameters('virtualNetworkId')]",
+      "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]"
+    },
+    "resources": [
+      {
+        "name": "[concat(parameters('virtualMachineName'), '-eth0')]",
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "2021-03-01",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [],
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "subnet": {
+                  "id": "[variables('subnetRef')]"
+                },
+                "privateIPAllocationMethod": "Dynamic"
+              }
+            }
+          ]
+        }
+      },
+     {
+        "name": "[parameters('virtualMachineName')]",
+        "type": "Microsoft.Compute/virtualMachines",
+        "apiVersion": "2021-07-01",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[concat('Microsoft.Network/networkInterfaces/', parameters('virtualMachineName'), '-eth0')]"
+        ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B4ms"
+        },
+        "storageProfile": {
+          "imageReference": {
+              "id": "/subscriptions/831242cd-4f5a-4da5-a775-2325ac01fe11/resourceGroups/rg_EUS2_CloudServices/providers/Microsoft.Compute/galleries/acg_eus2_ImageGallery/images/WS2022Std/versions/10.20348.2461"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('virtualMachineName'),'-lun0')]",
+            "createOption": "fromImage",
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            }
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(parameters('virtualMachineName'),'-lun1')]",
+              "diskSizeGB": 100,
+              "caching": "ReadWrite",
+              "lun": 1,
+              "managedDisk": {
+                "storageAccountType": "StandardSSD_LRS"
+              },
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachineName'), '-eth0'))]",
+              "properties": {
+                  "deleteOption": "Delete"
+              }
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "[substring(parameters('virtualMachineName'),8,add(length(parameters('virtualMachineName')),-8))]",
+          "adminUsername": "locala",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false,
+            "provisionVmAgent": true,
+            "patchSettings": {
+              "enableHotpatching": false,
+              "patchMode": "Manual"
+            }
+          }
+        },
+        "licenseType": "Windows_Server",
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+        
+      }
+      
+      }
+    ],
+    "outputs": {
+          "adminUsername":{
+              "type": "String",
+              "value": "locala"
+          }
+    }
+  }

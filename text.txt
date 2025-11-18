@@ -1,384 +1,380 @@
 <#
-PenLab VNet + resources builder (Az PowerShell)
-Creates: RG, VNet, Subnets, NSGs, VMs (DC + servers), optional JumpBox/Bastion, and auto-promotes DC to AD (penlab.local).
-Author: Assistant (example)
+Name:    deploy.ps1
+Version: 1.0
+Author:  Daniel Wink (Cloud Services)
+Date:    2025-1-7
+Purpose: Deploy Cohesity Cloud Services Infrastructure
+
+Pre-req:    latest Az powershell modules
+            GA is needed for the app reg via Cohesity Console
+            temporary CAP bypass is also needed via AAD Group 'AAD_CAP_DeviceLoc&Enroll_UserExclusions'
+
+To Do: 
+
+Manual steps:   1 Manual App Registration with custom role/permissions & Secret Generation
+                1 App Registration from the Cohesity Console using GA role
+
+                From Cohesity Cloud console, deploy (2) SaaS Connectors
+                A SaaS Connector will be deployed to each region (eus2 & central)
+                The IaC below will deploy the needed resources to support the SaaS Connectors
+
 #>
 
-# ---------------------------
-# PARAMETERS - edit as required
-# ---------------------------
-# Subscription / Location
-$SubscriptionId = ""   # optional: fill or leave blank to use current context
-$Location       = "eastus2"
-$RGName         = "rg_penlab_PenLab"
+#connect to tenant and marketing subscription
+Update-AzConfig -EnableLoginByWam $false
 
-# VNet and subnets matching diagram
-$VNetName       = "vnet_penlab"
-$VNetPrefix     = "10.199.0.0/16"
+Connect-AzAccount -Subscription sub_InfoTech -Tenant ssbstg.onmicrosoft.com
+#Connect-AzAccount -Subscription sub_InfoTech -Tenant southstatebank.onmicrosoft.com
 
-$SubnetDCName   = "snet-DC"
-$SubnetDCPrefix = "10.199.1.0/24"
-$SubnetAppName  = "snet-Servers"
-$SubnetAppPref  = "10.199.2.0/24"
-$SubnetJumpName = "AzureBastionSubnet"          # required name for Azure Bastion if used
-$SubnetJumpPref = "10.199.254.0/26"
+#region Register required providers
+#Register-AzResourceProvider -ProviderNamespace Microsoft.Storage
+#endregion
 
-# VM definitions (names reflect the diagram)
-$VMNetworkSize = "Standard_DS1_v2"
-$VMList = @(
-    @{ Name="SAZE-PENLAB-DC01"; Size="Standard_DS2_v2"; Subnet=$SubnetDCName; PrivateIP="10.199.1.10" },
-    @{ Name="SAZE-PENLAB-B01"; Size="Standard_DS1_v2"; Subnet=$SubnetAppName; PrivateIP="10.199.2.11" },
-    @{ Name="SAZE-PENLAB-S19"; Size="Standard_DS1_v2"; Subnet=$SubnetAppName; PrivateIP="10.199.2.12" },
-    @{ Name="SAZE-PENLAB-S22"; Size="Standard_DS1_v2"; Subnet=$SubnetAppName; PrivateIP="10.199.2.13" },
-    @{ Name="SAZE-PENLAB-C11"; Size="Standard_DS1_v2"; Subnet=$SubnetAppName; PrivateIP="10.199.2.14" }
-)
+#region Toggle Build Variables
+$locName = "centralus" # eastus2 | centralus 
+$tntName = "prd" # stg | prd
+$regName = $($locName.Replace("entral","")).Replace("ast","")
+#endRegion
 
-# Jumpbox / Bastion options
-$UseAzureBastion = $false   # set to $true to create Azure Bastion (requires AzureBastionSubnet and Standard SKU public IP)
-$CreateJumpBoxVM = $true    # set to $false if you will use Bastion
+#region Project Name Variables
+$projName = "Cohesity"
+$rgName = "rg_$(($regName).toUpper())_$($projName)" 
+$nsgName = "nsg_$($regName)_$($projName)"
+$rtName = "rt_$($regName)_$($projName)"
+$vnetName = "vnet_$($regName)-$($projName)"
+$snName1 = "snet_$($regName)_at-$($projName)"
+$snName2 = "snet_$($regName)_dt-$($projName)"
+$managedIdentity = "id_$($regName)_$($projName)"
 
-$JumpBoxName = "jumpbox-penlab"
-$JumpBoxSubnet = $SubnetJumpName
-$JumpBoxSize = "Standard_B1ms"
+$ipRFC =  @("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 
-# Domain info (for automatic DC promotion)
-$DomainName = "penlab.local"
-$DomainNetbios = "PENLAB"
-
-# Tags
-$Tags = @{ Project="PenLab"; Environment="PenTest" }
-
-# ------------------------
-# Start - ensure Az present
-# ------------------------
-if (-not (Get-Module -ListAvailable -Name Az)) {
-    Install-Module -Name Az -Scope CurrentUser -Force
-}
-Import-Module Az -ErrorAction Stop
-
-if ($SubscriptionId -ne "") {
-    Set-AzContext -SubscriptionId $SubscriptionId
+#detect region and tenant to set network specific params
+if($locName -eq "eastus2" -and $tntName -eq "stg"){
+    $addrSpace = "10.199.68.32/27"
+    $ipPrivate = @("10.199.68.32/28","10.199.68.48/28")
+    #$sqlName = "sql-$($regName)-SAZE-$($projName)-D01".ToLower()
+    $nexthop = "10.199.64.60"
+    $DnsServer = "10.199.64.228" #saze-mps-a01
+    $DnsServers = @("10.199.64.228","10.199.192.228") #saze-mps-a01 & sazc-mps-a01
 }
 
-# Ask for VM admin credential (local admin used to create VM & initial admin)
-Write-Host "Enter local admin credential to use for VMs (lab admin)."
-$vmCred = Get-Credential -Message "Provide local admin credential for the VMs (e.g. labadmin)."
-
-# Ask for AD safe mode password for the DC promotion (this will be used as DSRM password)
-Write-Host "Enter SafeMode (DSRM) password for the AD promotion (will be stored in memory only)."
-$dsrmCred = Read-Host -AsSecureString "Type DSRM password (SecureString)"
-
-# -------------------------
-# Create resource group
-# -------------------------
-Write-Host "Creating resource group $RGName in $Location..."
-$rg = New-AzResourceGroup -Name $RGName -Location $Location -Tag $Tags -Force
-
-# -------------------------
-# Create NSGs and rules
-# -------------------------
-Write-Host "Creating Network Security Groups..."
-# NSG for DC (allow required inbound for domain services from VNet & jumpbox)
-$nsgDC = New-AzNetworkSecurityGroup -ResourceGroupName $RGName -Location $Location -Name "nsg-DC" -SecurityRules @(
-    # Allow DNS (TCP/UDP 53) from VNet
-    New-AzNetworkSecurityRuleConfig -Name "Allow-DNS-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 53 -Access Allow -Priority 100 -Direction Inbound,
-    New-AzNetworkSecurityRuleConfig -Name "Allow-DNS-UDP-VNet" -Protocol Udp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 53 -Access Allow -Priority 110 -Direction Inbound,
-    # Allow LDAP (389) and LDAPS (636) from VNet
-    New-AzNetworkSecurityRuleConfig -Name "Allow-LDAP-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 389 -Access Allow -Priority 120 -Direction Inbound,
-    New-AzNetworkSecurityRuleConfig -Name "Allow-LDAPS-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 636 -Access Allow -Priority 130 -Direction Inbound,
-    # Allow Kerberos (88)
-    New-AzNetworkSecurityRuleConfig -Name "Allow-Kerberos-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 88 -Access Allow -Priority 140 -Direction Inbound,
-    # Allow SMB (445) from VNet (lab only)
-    New-AzNetworkSecurityRuleConfig -Name "Allow-SMB-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 445 -Access Allow -Priority 150 -Direction Inbound
-)
-
-# NSG for App/Servers (allow RDP from JumpBox/Bastion via VirtualNetwork or specific source)
-$nsgServers = New-AzNetworkSecurityGroup -ResourceGroupName $RGName -Location $Location -Name "nsg-Servers" -SecurityRules @(
-    New-AzNetworkSecurityRuleConfig -Name "Allow-RDP-From-VNet" -Protocol Tcp -SourceAddressPrefix VirtualNetwork -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 3389 -Access Allow -Priority 100 -Direction Inbound
-)
-
-# NSG for JumpBox (if using JumpBox) - restrict inbound RDP to Internet for lab; tighten by SourceAddressPrefix to your IP
-$nsgJump = New-AzNetworkSecurityGroup -ResourceGroupName $RGName -Location $Location -Name "nsg-Jump" -SecurityRules @(
-    New-AzNetworkSecurityRuleConfig -Name "Allow-RDP-From-Internet" -Protocol Tcp -SourceAddressPrefix Internet -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 3389 -Access Allow -Priority 100 -Direction Inbound
-)
-
-# -------------------------
-# Create VNet and subnets
-# -------------------------
-Write-Host "Creating virtual network $VNetName and subnets..."
-$vnet = New-AzVirtualNetwork -Name $VNetName -ResourceGroupName $RGName -Location $Location -AddressPrefix $VNetPrefix
-
-# Add subnets (we will attach NSGs after committing the VNet)
-$vnet = Add-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetDCName -AddressPrefix $SubnetDCPrefix
-$vnet = Add-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetAppName -AddressPrefix $SubnetAppPref
-$vnet = Add-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetJumpName -AddressPrefix $SubnetJumpPref
-
-$vnet | Set-AzVirtualNetwork
-
-# Refresh vnet object
-$vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $RGName
-
-# Associate NSGs to subnets
-Write-Host "Associating NSGs to subnets..."
-Set-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetDCName -AddressPrefix $SubnetDCPrefix -NetworkSecurityGroup $nsgDC | Out-Null
-Set-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetAppName -AddressPrefix $SubnetAppPref -NetworkSecurityGroup $nsgServers | Out-Null
-Set-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetJumpName -AddressPrefix $SubnetJumpPref -NetworkSecurityGroup $nsgJump | Out-Null
-$vnet | Set-AzVirtualNetwork
-
-# get subnet objects for NIC creation
-$vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $RGName
-$subnetDC = $vnet.Subnets | Where-Object { $_.Name -eq $SubnetDCName }
-$subnetApp = $vnet.Subnets | Where-Object { $_.Name -eq $SubnetAppName }
-$subnetJump = $vnet.Subnets | Where-Object { $_.Name -eq $SubnetJumpName }
-
-# -------------------------
-# Optionally create Azure Bastion or JumpBox
-# -------------------------
-if ($UseAzureBastion) {
-    Write-Host "Deploying Azure Bastion (requires Standard SKU pip, may take several minutes)..."
-    $pip = New-AzPublicIpAddress -Name "pip-bastion-$RGName" -ResourceGroupName $RGName -Location $Location -AllocationMethod Static -Sku Standard
-    # create Bastion (requires the Az.Bastion cmdlets available)
-    try {
-        New-AzBastion -ResourceGroupName $RGName -Name "bastion-$RGName" -VirtualNetworkName $VNetName -PublicIpAddress $pip -Location $Location | Out-Null
-    } catch {
-        Write-Warning "Azure Bastion creation failed or Az.Bastion module not present. Install Az.Bastion or set UseAzureBastion = `$false to use a JumpBox VM."
-    }
+if($locName -eq "centralus" -and $tntName -eq "stg"){
+    $addrSpace = "10.199.196.32/27"
+    $ipPrivate = @("10.199.196.32/28","10.199.196.48/28")
+    #$sqlName = "sql-$($regName)-SAZC-$($projName)-D01".ToLower()
+    $nexthop = "10.199.192.60"
+    $DnsServer = "10.199.192.228" #sazc-mps-a01
+    $DnsServers = @("10.199.64.228","10.199.192.228") #saze-mps-a01 & sazc-mps-a01
 }
 
-$jumpBoxPublicIP = $null
-if (-not $UseAzureBastion -and $CreateJumpBoxVM) {
-    Write-Host "Creating JumpBox VM $JumpBoxName with public IP (use to RDP into lab VMs)."
-    $pip = New-AzPublicIpAddress -Name "$JumpBoxName-pip" -ResourceGroupName $RGName -Location $Location -AllocationMethod Dynamic
-    $nic = New-AzNetworkInterface -Name "$JumpBoxName-nic" -ResourceGroupName $RGName -Location $Location -SubnetId $subnetJump.Id -PublicIpAddressId $pip.Id -NetworkSecurityGroupId $nsgJump.Id
-    $vmConfig = New-AzVMConfig -VMName $JumpBoxName -VMSize $JumpBoxSize |
-        Set-AzVMOperatingSystem -Windows -ComputerName $JumpBoxName -Credential $vmCred -ProvisionVMAgent -EnableAutoUpdate |
-        Set-AzVMSourceImage -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer" -Skus "2022-Datacenter" -Version "latest" |
-        Add-AzVMNetworkInterface -Id $nic.Id
-    New-AzVM -ResourceGroupName $RGName -Location $Location -VM $vmConfig -Tag $Tags | Out-Null
-
-    $jumpBoxPublicIP = (Get-AzPublicIpAddress -ResourceGroupName $RGName -Name "$JumpBoxName-pip").IpAddress
-    Write-Host "Jumpbox created. Public IP: $jumpBoxPublicIP"
+if($locName -eq "eastus2" -and $tntName -eq "prd"){
+    $addrSpace = "10.199.4.32/27"
+    $ipPrivate = @("10.199.4.32/28","10.199.4.48/28")
+    #$sqlName = "sql-$($regName)-PAZE-$($projName)-D01".ToLower()
+    $nexthop = "10.199.0.60"
+    $DnsServer = "10.199.0.228" #paze-mps-a01
+    $DnsServers = @("10.199.0.228","10.199.128.228") #paze-mps-a01 & pazc-mps-a01
 }
 
-# -------------------------
-# Helper: create VM function
-# -------------------------
-function New-PenLabVM {
-    param(
-        [Parameter(Mandatory=$true)][string]$Name,
-        [Parameter(Mandatory=$true)][string]$SubnetName,
-        [string]$PrivateIP = "",
-        [string]$VMSize = "Standard_DS1_v2"
-    )
+if($locName -eq "centralus" -and $tntName -eq "prd"){
+    $addrSpace = "10.199.132.32/27"
+    $ipPrivate = @("10.199.132.32/28","10.199.132.48/28")
+    #$sqlName = "sql-$($regName)-PAZC-$($projName)-D01".ToLower()
+    $nexthop = "10.199.128.60"
+    $DnsServer = "10.199.128.228" #pazc-mps-a01
+    $DnsServers = @("10.199.0.228","10.199.128.228") #paze-mps-a01 & pazc-mps-a01
+}
+#endregion
 
-    Write-Host "Creating VM: $Name on subnet: $SubnetName (private IP: $PrivateIP)"
-    $vnetLocal = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $RGName
-    $subnetObj = $vnetLocal.Subnets | Where-Object { $_.Name -eq $SubnetName }
-    if (-not $subnetObj) { throw "Subnet $SubnetName not present" }
+#Region RG & Managed Identity
+Set-AzContext -Subscription "sub_InfoTech"
+New-AzResourceGroup -name $rgName -Location $locName
 
-    $nicName = "$Name-nic"
-    if ($PrivateIP -and $PrivateIP -ne "") {
-        $nic = New-AzNetworkInterface -Name $nicName -ResourceGroupName $RGName -Location $Location -SubnetId $subnetObj.Id -PrivateIpAddress $PrivateIP
-    } else {
-        $nic = New-AzNetworkInterface -Name $nicName -ResourceGroupName $RGName -Location $Location -SubnetId $subnetObj.Id
-    }
+New-AzUserAssignedIdentity -ResourceGroupName $rgName -Name $managedIdentity -Location $locName
+#endregion
 
-    $vmConf = New-AzVMConfig -VMName $Name -VMSize $VMSize |
-        Set-AzVMOperatingSystem -Windows -ComputerName $Name -Credential $vmCred -ProvisionVMAgent -EnableAutoUpdate |
-        Set-AzVMSourceImage -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer" -Skus "2022-Datacenter" -Version "latest" |
-        Add-AzVMNetworkInterface -Id $nic.Id
 
-    New-AzVM -ResourceGroupName $RGName -Location $Location -VM $vmConf -Tag $Tags -NoAutoUpdate | Out-Null
+
+
+#Region Networking
+#$rt = Get-AzRouteTable -Name $rtname -ResourceGroupName $rgName 
+$rt = New-AzRouteTable -Name $rtName -ResourceGroupName $rgName -Location $locName
+Add-AzRouteConfig -RouteTable $rt -Name "vnet1" -AddressPrefix $ipPrivate[0] -NextHopType VirtualAppliance -NextHopIpAddress $nexthop
+Add-AzRouteConfig -RouteTable $rt -Name "vnet2" -AddressPrefix $ipPrivate[1] -NextHopType VirtualAppliance -NextHopIpAddress $nexthop
+Set-AzRouteTable -RouteTable $rt
+
+$nsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location $locName
+#$nsg = Get-AzNetworkSecurityGroup -name $nsgName -ResourceGroupName $rgName 
+
+$p = @{
+    NetworkSecurityGroup = $nsg
+    Direction = "Inbound"
+    Priority = 100
+    Name = "Allow-LB-In"
+    SourceAddressPrefix = "AzureLoadBalancer"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "VirtualNetwork" 
+    DestinationPortRange = "*"
+    Protocol = "*"
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg
+    Direction = "Inbound"
+    Priority = 110
+    Name = "Allow-ICMP-In"
+    SourceAddressPrefix = $ipRFC
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "VirtualNetwork" 
+    DestinationPortRange = "*"
+    Protocol = "Icmp"
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg
+    Direction = "Inbound"
+    Priority = 800
+    Name = "Allow-Tanium-In"
+    SourceAddressPrefix = "*"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "*" 
+    DestinationPortRange = "17472"
+    Protocol = "Tcp"
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+[array]$CohesityPortsIn = 80, 443, 11113, 11117
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Inbound"
+    Priority = 900 
+    Name = "Allow-Cohesity-In" 
+    SourceAddressPrefix = $ipRFC
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "VirtualNetwork" 
+    DestinationPortRange = $CohesityPortsIn
+    Protocol = "Tcp" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Inbound" 
+    Priority = 1100
+    Name = "Allow-MSSQL-In"
+    SourceAddressPrefix = "VirtualNetwork" 
+    SourcePortRange = "*"
+    DestinationAddressPrefix = $ipPrivate[1] 
+    DestinationPortRange = "1433"
+    Protocol = "Tcp"
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Inbound" 
+    Priority = 4096 
+    Name = "Deny-All-In" 
+    SourceAddressPrefix = "*"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "*" 
+    DestinationPortRange = "*" 
+    Protocol = "*" 
+    Access = "Deny"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 100 
+    Name = "Allow-LB-Out" 
+    SourceAddressPrefix = "VirtualNetwork" 
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "AzureLoadBalancer" 
+    DestinationPortRange = "*" 
+    Protocol = "*" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 110 
+    Name = "Allow-ICMP-Out" 
+    SourceAddressPrefix = "VirtualNetwork"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = $ipRFC
+    DestinationPortRange = "*" 
+    Protocol = "Icmp" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 200 
+    Name = "Allow-DNS-Out" 
+    SourceAddressPrefix = "VirtualNetwork"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = $DnsServers 
+    DestinationPortRange = 53 
+    Protocol = "*" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+[array]$TaniumPorts = 443, 17472, 17486
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 800
+    Name = "Allow-Tanium-Out" 
+    SourceAddressPrefix = "VirtualNetwork"
+    SourcePortRange = "*"
+    DestinationAddressPrefix = "*" 
+    DestinationPortRange = $TaniumPorts
+    Protocol = "Tcp" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+[array]$CohesityPortsOut = 443, 11117, 50051
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound"
+    Priority = 900 
+    Name = "Allow-Cohesity-Out" 
+    SourceAddressPrefix = "*"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "VirtualNetwork" 
+    DestinationPortRange = $CohesityPortsOut
+    Protocol = "Tcp" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+[array]$IntraVnetPortsOut = 443
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 1000 
+    Name = "Allow-IntraVnet-Out" 
+    SourceAddressPrefix = "VirtualNetwork"
+    SourcePortRange = "*"
+    DestinationAddressPrefix = "*" 
+    DestinationPortRange = $IntraVnetPortsOut
+    Protocol = "Tcp" 
+    Access = "Allow"
+}
+Add-AzNetworkSecurityRuleConfig @p
+$p = @{
+    NetworkSecurityGroup = $nsg 
+    Direction = "Outbound" 
+    Priority = 4096 
+    Name = "Deny-All-Out" 
+    SourceAddressPrefix = "*"
+    SourcePortRange = "*" 
+    DestinationAddressPrefix = "*" 
+    DestinationPortRange = "*" 
+    Protocol = "*" 
+    Access = "Deny"
+}
+Add-AzNetworkSecurityRuleConfig @p
+Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
+
+$p = @{
+    Name = $vnetName
+    ResourceGroup = $rgName
+    Location = $locName
+    AddressPrefix = $addrSpace
+    DnsServer = $DnsServer
+}
+$vnet = New-AzVirtualNetwork @p
+
+$p = @{
+    VirtualNetwork = $vnet
+    Name = $snName1 #snet_*_at-Cohesity
+    AddressPrefix = $ipPrivate[0]
+    RouteTable = $rt 
+    NetworkSecurityGroup = $nsg
+}
+Add-AzVirtualNetworkSubnetConfig @p
+$p = @{
+    VirtualNetwork = $vnet
+    Name = $snName2 #snet_*_dt-Cohesity
+    AddressPrefix = $ipPrivate[1] 
+    ServiceEndpoint = @("Microsoft.Sql") 
+    RouteTable = $rt 
+    NetworkSecurityGroup = $nsg
+}
+Add-AzVirtualNetworkSubnetConfig @p
+$vnet = Set-AzVirtualNetwork -VirtualNetwork $vnet
+
+#$vnet = Get-AzVirtualNetwork -ResourceGroupName $rgName -Name $vnetName
+Set-AzContext -Subscription "sub_InfoTech"
+$p = @{
+    Name = "peer_$($regName)_$($projName)2hub"
+    VirtualNetwork = $vnet
+    RemoteVirtualNetworkId = $(Get-AzVirtualNetwork -Name "vnet_centralus_hub_01" -ResourceGroupName "rg_$($regName)_TransitHub").Id
 }
 
-# -------------------------
-# Create VMs (DC + others)
-# -------------------------
-foreach ($vm in $VMList) {
-    New-PenLabVM -Name $vm.Name -SubnetName $vm.Subnet -PrivateIP $vm.PrivateIP -VMSize $vm.Size
+Add-AzVirtualNetworkPeering @p
+
+# was getting errors with peering when running back to back with above ^ cmd."
+Write-Output "pausing for 60 seconds before proceeding."
+start-sleep -Seconds 60
+
+
+$p = @{
+    Name = "peer_$($regName)_hub2$($projName)"
+    RemoteVirtualNetworkId = $vnet.Id
+    VirtualNetwork = $(Get-AzVirtualNetwork -Name "vnet_centralus_hub_01" -ResourceGroupName "rg_$($regName)_TransitHub")
 }
+Add-AzVirtualNetworkPeering @p
 
-# Wait a bit for VMs to be provisioned enough for RunCommand (could be > 1-2 minutes)
-Write-Host "Waiting 60 seconds for initial VM provisioning..."
-Start-Sleep -Seconds 60
+#endregion
 
-# -------------------------
-# Promote DC to Active Directory
-# -------------------------
-# We'll use Invoke-AzVMRunCommand to run PowerShell on the DC VM to:
-# - install AD DS role
-# - run Install-ADDSForest with -DomainName and the DSRM password
-#
-# Security note: we pass the DSRM password as secure string into the script block.
-$dcName = ($VMList | Where-Object { $_.Name -match "DC01" }).Name
-if (-not $dcName) {
-    Write-Warning "DC VM name not found in VMList (expected a name containing 'DC01'). Skipping AD promotion."
-} else {
-    Write-Host "Promoting $dcName to domain controller for domain $DomainName..."
-    # Convert secure string to encrypted standard string that can be used inside Azure run command
-    $dsrmPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($dsrmCred))
-    # The command script must run on the VM; use Install-WindowsFeature and Install-ADDSForest with -Force
-    $script = @"
-\$ErrorActionPreference = 'Stop'
-Write-Output 'Installing AD DS feature...'
-Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
-Write-Output 'Importing ADDSDeployment module...'
-Import-Module ADDSDeployment
-Write-Output 'Creating secure string for DSRM...'
-\$dsrm = ConvertTo-SecureString -String '$dsrmPlain' -AsPlainText -Force
-Write-Output 'Installing AD forest: $DomainName ...'
-Install-ADDSForest -DomainName '$DomainName' -DomainNetbiosName '$DomainNetbios' -SafeModeAdministratorPassword \$dsrm -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -LogPath "C:\Windows\NTDS" -SysvolPath "C:\Windows\SYSVOL" -Force
+
+#region NSG rules run once - ONLY RUN ONCE, don't re-run when toggling region like the rest above^^^^^^
+#will just error with dupes if ran twice, no big deal.
+#inline list of NSGs to update with inbound Cohesity rule.
+$NSGs2Mod = @"
+nsg_eus2_forcepoint
+nsg_eus2_transit
+nsg_eus2_paloalto
+nsg_eus2_kentico
+nsg_eus2_pt-APIManagement
+nsg_cus_forcepoint
+nsg_cus_transit
+nsg_cus_paloalto
+nsg_cus_kentico
+nsg_cus_pt-APIManagement
 "@
 
-    # Run the command on the DC VM
-    try {
-        $runResult = Invoke-AzVMRunCommand -ResourceGroupName $RGName -Name $dcName -CommandId 'RunPowerShellScript' -ScriptString $script -ErrorAction Stop
-        Write-Host "AD promotion invoked. The VM will reboot as part of the promotion. Monitor in Azure portal if required."
-    } catch {
-        Write-Warning "Invoke-AzVMRunCommand failed: $_. Exception: $($_.Exception.Message)"
-        Write-Warning "You may need to wait for VM agent readiness or perform promotion manually via RDP/PowerShell."
-    } finally {
-        # clear sensitive plain text
-        if ($dsrmPlain) { $dsrmPlain = $null }
-    }
-}
+$NSGs2Mod = $($NSGs2Mod -Split "`n").TrimEnd("`r").Trim()
 
-# -------------------------
-# Summary output
-# -------------------------
-Write-Host "Deployment script finished. Resource list for $RGName:"
-Get-AzResource -ResourceGroupName $RGName | Select-Object ResourceType, Name | Sort-Object ResourceType | Format-Table -AutoSize
+$azSubs = get-azsubscription | Select-Object -ExpandProperty name
 
-Write-Host "`nNext manual steps (if needed):"
-Write-Host " - If DC promotion didn't complete, RDP into SAZE-PENLAB-DC01 (or use Bastion) and finish AD DS promotion manually."
-Write-Host " - Configure DNS on VMs to point at the DC IP (10.199.1.10) if DHCP not already updated."
-Write-Host " - Harden NSGs (change JumpBox source to your public IP, restrict management ports)."
-Write-Host " - Enable monitoring/diagnostics/backup per policy."
+foreach( $azSub in $azSubs ) {
+    Set-AzContext -Subscription $azSub | out-null
+    Start-Sleep -Seconds 5
+    $azNsgs = Get-AzNetworkSecurityGroup | ? {$NSGs2Mod -contains $_.Name}
 
-# End of script
-
-
-
-{
-  "$schema": "http://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "subnetName": {
-      "type": "string"
-    },
-    "virtualNetworkId": {
-      "type": "string"
-    },
-    "virtualMachineName": {
-      "type": "string"
-    },
-    "adminPublicKey": {
-      "type": "string",
-      "metadata": {
-        "description": "SSH public key for the Linux admin user"
-      }
-    }
-  },
-  "variables": {
-    "vnetId": "[parameters('virtualNetworkId')]",
-    "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]"
-  },
-  "resources": [
-    {
-      "name": "[concat(parameters('virtualMachineName'), '-eth0')]",
-      "type": "Microsoft.Network/networkInterfaces",
-      "apiVersion": "2021-03-01",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "subnet": {
-                "id": "[variables('subnetRef')]"
-              },
-              "privateIPAllocationMethod": "Dynamic"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "[parameters('virtualMachineName')]",
-      "type": "Microsoft.Compute/virtualMachines",
-      "apiVersion": "2021-07-01",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', parameters('virtualMachineName'), '-eth0')]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "Standard_B4ms"
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "RedHat",
-            "offer": "RHEL",
-            "sku": "9_4",
-            "version": "latest"
-          },
-          "osDisk": {
-            "name": "[concat(parameters('virtualMachineName'),'-lun0')]",
-            "createOption": "fromImage",
-            "managedDisk": {
-              "storageAccountType": "StandardSSD_LRS"
-            }
-          },
-          "dataDisks": [
-            {
-              "name": "[concat(parameters('virtualMachineName'),'-lun1')]",
-              "diskSizeGB": 100,
-              "caching": "ReadWrite",
-              "lun": 1,
-              "managedDisk": {
-                "storageAccountType": "StandardSSD_LRS"
-              },
-              "createOption": "Empty"
-            }
-          ]
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('virtualMachineName'), '-eth0'))]",
-              "properties": {
-                "deleteOption": "Delete"
-              }
-            }
-          ]
-        },
-        "osProfile": {
-          "computerName": "[substring(parameters('virtualMachineName'),8,add(length(parameters('virtualMachineName')),-8))]",
-          "adminUsername": "locala",
-          "linuxConfiguration": {
-            "disablePasswordAuthentication": true,
-            "ssh": {
-              "publicKeys": [
-                {
-                  "path": "/home/locala/.ssh/authorized_keys",
-                  "keyData": "[parameters('adminPublicKey')]"
-                }
-              ]
-            }
-          }
-        },
-        "diagnosticsProfile": {
-          "bootDiagnostics": {
-            "enabled": true
-          }
+        foreach ( $azNsg in $azNsgs ) {
+        write-output "adding inbound rule for Cohesity to $($aznsg.name)"
+        #Add inbound rule
+        $p = @{
+            NetworkSecurityGroup = $azNsg
+            Direction = "Inbound"
+            Priority = 900
+            Name = "Allow-Cohesity-In"
+            SourceAddressPrefix = "*"
+            SourcePortRange = "*" 
+            DestinationAddressPrefix = "*" 
+            DestinationPortRange = "50051"
+            Protocol = "TCP"
+            Access = "Allow"
         }
-      }
+       Add-AzNetworkSecurityRuleConfig @p  | Set-AzNetworkSecurityGroup
     }
-  ],
-  "outputs": {
-    "adminUsername": {
-      "type": "String",
-      "value": "locala"
-    }
-  }
-}
+ }
+#endregion

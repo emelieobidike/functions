@@ -1,46 +1,74 @@
 <#
 Name:    deploy_penlab.ps1
 Version: 1.0
-Author:  Anthony’s AI Sidekick
-Date:    2025-1-18
-Purpose: Deploy Penetration Lab Infrastructure (Staging)
+Author:  PenLab Deployment
+Date:    2025-01-18
+Purpose: Deploy PenLab Infrastructure in STG (EastUS2)
 
-Pre-req: Latest Az modules, existing Subscription & MG
+Pre-req: Latest Az modules
+         Access to sub_InfoTech
+         Ability to create networking + compute resources
+
+Notes:
+  - VNet: vnet_eus2_PenLab
+  - Subnet: snet_eus2_PenLab (10.199.70.96/27)
+  - 5 VMs total:
+        SAZS-PENLAB-DC01 (WS2022)
+        SAZS-PENLAB-S19  (WS2022)
+        SAZS-PENLAB-S22  (WS2022)
+        SAZS-PENLAB-H01  (Win11)
+        SAZS-PENLAB-C11  (RHEL)
+  - Auto schedules:
+        DC01 @ 07:00
+        Others @ 07:05
+        All stop @ 19:00
 #>
 
+#region Connect
 Update-AzConfig -EnableLoginByWam $false
+Connect-AzAccount -Subscription "sub_InfoTech" -Tenant "ssbstg.onmicrosoft.com"
+Set-AzContext -Subscription "sub_InfoTech"
+#endregion
 
-# -------- Connect to tenant + subscription --------
-Connect-AzAccount -Subscription sub_Infosec -Tenant ssbstg.onmicrosoft.com
-
-# -------- Region Toggle --------
+#region Params / Vars
 $locName = "eastus2"
-$regName = "eus2"
 $tntName = "stg"
+$regName = $($locName.Replace("entral","")).Replace("ast","")   # eus2
 
-# -------- Naming --------
 $projName = "PenLab"
-$rgName = "rg_${regName}_${projName}"
-$vnetName = "vnet_${regName}_${projName}"
-$snName = "snet_${regName}_${projName}"
-$rtName = "rt_${regName}_${projName}"
-$nsgName = "nsg_${regName}_${projName}"
+$rgName   = "rg_$(($regName).ToUpper())_$($projName)"           # rg_EUS2_PenLab
+$vnetName = "vnet_eus2_PenLab"
+$snName   = "snet_eus2_PenLab"
+$nsgName  = "nsg_eus2_PenLab"
+$rtName   = "rt_eus2_PenLab"
+$aaName   = "aa_eus2_PenLab"
+$saName   = "st$($regName)penlab01".ToLower()
 
-# -------- Network Prefixes --------
 $addrSpace = "10.199.70.96/27"
 $subnetPrefix = "10.199.70.96/27"
 
-# -------- Create Resource Group --------
-Set-AzContext -Subscription sub_Infosec
-New-AzResourceGroup -Name $rgName -Location $locName
+# Admin
+$adminUser = "locala"
+Write-Host "Enter Windows VM password" -ForegroundColor Yellow
+$adminCred = Get-Credential -UserName $adminUser
 
-# -------- Route Table --------
+# SSH public key for RHEL
+$sshPublicKeyPath = "$env:USERPROFILE\.ssh\id_rsa.pub"
+$sshPublicKey = Get-Content $sshPublicKeyPath -Raw
+#endregion
+
+#region Resource Group
+New-AzResourceGroup -Name $rgName -Location $locName -Force | Out-Null
+#endregion
+
+#region Route Table
 $rt = New-AzRouteTable -Name $rtName -ResourceGroupName $rgName -Location $locName
+#endregion
 
-# -------- NSG --------
+#region NSG (deny-all)
 $nsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location $locName
 
-# Inbound deny
+# Deny-All-In
 $p = @{
     NetworkSecurityGroup = $nsg
     Direction = "Inbound"
@@ -53,9 +81,9 @@ $p = @{
     Protocol = "*"
     Access = "Deny"
 }
-Add-AzNetworkSecurityRuleConfig @p
+Add-AzNetworkSecurityRuleConfig @p | Out-Null
 
-# Outbound deny
+# Deny-All-Out
 $p = @{
     NetworkSecurityGroup = $nsg
     Direction = "Outbound"
@@ -68,11 +96,12 @@ $p = @{
     Protocol = "*"
     Access = "Deny"
 }
-Add-AzNetworkSecurityRuleConfig @p
+Add-AzNetworkSecurityRuleConfig @p | Out-Null
 
-Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
+$nsg = Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
+#endregion
 
-# -------- VNet + Subnet --------
+#region VNet + Subnet
 $p = @{
     Name = $vnetName
     ResourceGroup = $rgName
@@ -85,79 +114,149 @@ $p = @{
     VirtualNetwork = $vnet
     Name = $snName
     AddressPrefix = $subnetPrefix
-    NetworkSecurityGroup = $nsg
     RouteTable = $rt
+    NetworkSecurityGroup = $nsg
 }
-Add-AzVirtualNetworkSubnetConfig @p
+Add-AzVirtualNetworkSubnetConfig @p | Out-Null
 
 $vnet = Set-AzVirtualNetwork -VirtualNetwork $vnet
+$subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $snName
+#endregion
 
-# -------- VM Definitions --------
-$adminUser = "locala"
-$winPassword = Read-Host -Prompt "Enter password for Windows VMs" -AsSecureString
-$sshKey = Get-Content -Path "~/.ssh/id_rsa.pub"
-
-$vmList = @(
-    @{ Name="SAZS-PENLAB-DC01"; Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:00"; Shutdown="19:00" }
-    @{ Name="SAZS-PENLAB-H01";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
-    @{ Name="SAZS-PENLAB-S19";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
-    @{ Name="SAZS-PENLAB-S22";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
-    @{ Name="SAZS-PENLAB-LNX01"; Image="RedHat:RHEL:9-lvm-gen2:latest"; Boot="07:05"; Shutdown="19:00" }
+#region VM Definitions
+$vmDefs = @(
+    [pscustomobject]@{
+        Name="SAZS-PENLAB-DC01"; Os="Windows"; Start="07:00";
+        Publisher="MicrosoftWindowsServer"; Offer="WindowsServer"; Sku="2022-datacenter-g2"
+    },
+    [pscustomobject]@{
+        Name="SAZS-PENLAB-S19"; Os="Windows"; Start="07:05";
+        Publisher="MicrosoftWindowsServer"; Offer="WindowsServer"; Sku="2022-datacenter-g2"
+    },
+    [pscustomobject]@{
+        Name="SAZS-PENLAB-S22"; Os="Windows"; Start="07:05";
+        Publisher="MicrosoftWindowsServer"; Offer="WindowsServer"; Sku="2022-datacenter-g2"
+    },
+    [pscustomobject]@{
+        Name="SAZS-PENLAB-H01"; Os="Windows"; Start="07:05";
+        Publisher="MicrosoftWindowsDesktop"; Offer="windows-11"; Sku="win11-23h2-pro"
+    },
+    [pscustomobject]@{
+        Name="SAZS-PENLAB-C11"; Os="Linux"; Start="07:05";
+        Publisher="RedHat"; Offer="RHEL"; Sku="9_3"
+    }
 )
 
-# -------- Deploy VMs --------
-foreach($vm in $vmList) {
+$shutdown = "19:00"
+#endregion
+
+#region Create VMs
+foreach ($vm in $vmDefs) {
 
     $nicName = "nic_$($vm.Name)"
-    $ipName = "ip_$($vm.Name)"
 
-    # Public IP (None for PenLab)
-    $pip = New-AzPublicIpAddress -Name $ipName -ResourceGroupName $rgName -Location $locName -Sku Basic -AllocationMethod Static
+    $nic = New-AzNetworkInterface -Name $nicName `
+        -ResourceGroupName $rgName `
+        -Location $locName `
+        -SubnetId $subnet.Id
 
-    # NIC
-    $nic = New-AzNetworkInterface -Name $nicName -ResourceGroupName $rgName -Location $locName -SubnetId $vnet.Subnets[0].Id -PublicIpAddress $pip
+    if ($vm.Os -eq "Linux") {
 
-    # VM config
-    $vmConfig = New-AzVMConfig -VMName $vm.Name -VMSize "Standard_DS1_v2"
+        $vmConfig = New-AzVMConfig -VMName $vm.Name -VMSize "Standard_D4s_v5" |
+            Set-AzVMOperatingSystem -Linux -ComputerName $vm.Name -Credential $adminCred -DisablePasswordAuthentication |
+            Set-AzVMSourceImage -PublisherName $vm.Publisher -Offer $vm.Offer -Skus $vm.Sku -Version "latest" |
+            Add-AzVMNetworkInterface -Id $nic.Id
 
-    if($vm.Name -eq "SAZS-PENLAB-LNX01"){
-        # Linux
-        $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $vm.Name -Credential (New-Object System.Management.Automation.PSCredential($adminUser,(ConvertTo-SecureString "placeholder" -AsPlainText -Force))) -DisablePasswordAuthentication
-        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName ($vm.Image.Split(":")[0]) -Offer ($vm.Image.Split(":")[1]) -Skus ($vm.Image.Split(":")[2]) -Version "latest"
-        Add-AzVMSSHKey -VM $vmConfig -KeyData $sshKey -Path "/home/$adminUser/.ssh/authorized_keys"
+        $vmConfig = Add-AzVMSshPublicKey -VM $vmConfig `
+            -KeyData $sshPublicKey `
+            -Path "/home/$adminUser/.ssh/authorized_keys"
     }
     else {
-        # Windows
-        $cred = New-Object System.Management.Automation.PSCredential($adminUser, $winPassword)
-        $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Windows -ComputerName $vm.Name -Credential $cred
-        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName ($vm.Image.Split(":")[0]) -Offer ($vm.Image.Split(":")[1]) -Skus ($vm.Image.Split(":")[2]) -Version "latest"
+        $vmConfig = New-AzVMConfig -VMName $vm.Name -VMSize "Standard_D4s_v5" |
+            Set-AzVMOperatingSystem -Windows -ComputerName $vm.Name -Credential $adminCred -ProvisionVMAgent -EnableAutoUpdate |
+            Set-AzVMSourceImage -PublisherName $vm.Publisher -Offer $vm.Offer -Skus $vm.Sku -Version "latest" |
+            Add-AzVMNetworkInterface -Id $nic.Id
     }
 
-    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+    New-AzVM -ResourceGroupName $rgName -Location $locName -VM $vmConfig | Out-Null
 
-    New-AzVM -ResourceGroupName $rgName -Location $locName -VM $vmConfig
+    # Tag schedule info
+    $tags = @{
+        "AutoStart" = $vm.Start
+        "AutoStop"  = $shutdown
+        "Weekdays"  = "True"
+    }
+
+    Update-AzTag -ResourceId (Get-AzVM -Name $vm.Name -ResourceGroupName $rgName).Id `
+        -Tag $tags -Operation Merge | Out-Null
+}
+#endregion
+
+#region Storage Account
+New-AzStorageAccount -Name $saName -ResourceGroupName $rgName -Location $locName -SkuName "Standard_LRS" -Kind "StorageV2" | Out-Null
+#endregion
+
+#region Automation (Schedules)
+$aa = New-AzAutomationAccount -Name $aaName -ResourceGroupName $rgName -Location $locName -Plan "Basic" -AssignSystemIdentity
+$aaId = $aa.Identity.PrincipalId
+
+New-AzRoleAssignment -ObjectId $aaId -RoleDefinitionName "Contributor" -Scope (Get-AzResourceGroup -Name $rgName).ResourceId | Out-Null
+
+$runbookName = "StartStop-PenLab"
+$runbookPath = "$env:TEMP\$runbookName.ps1"
+
+@"
+param(
+    [string]\$Action,
+    [string[]]\$VMList,
+    [string]\$RG
+)
+
+Connect-AzAccount -Identity | Out-Null
+Set-AzContext -Subscription "sub_InfoTech" | Out-Null
+
+foreach(\$vm in \$VMList) {
+    if(\$Action -eq "Start") { Start-AzVM -Name \$vm -ResourceGroupName \$RG -ErrorAction Continue }
+    else { Stop-AzVM -Name \$vm -ResourceGroupName \$RG -Force -ErrorAction Continue }
+}
+"@ | Out-File $runbookPath -Encoding UTF8
+
+Import-AzAutomationRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName `
+    -Name $runbookName -Path $runbookPath -Type PowerShell | Out-Null
+
+Publish-AzAutomationRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $runbookName | Out-Null
+
+# Helper
+function New-PenLabSchedule {
+    param($name,$time,$action,$vms)
+
+    $start = (Get-Date "$time").AddDays(1)
+
+    $s = New-AzAutomationSchedule -AutomationAccountName $aaName `
+        -ResourceGroupName $rgName `
+        -Name $name `
+        -StartTime $start `
+        -WeekInterval 1 `
+        -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday `
+        -TimeZone "Eastern Standard Time"
+
+    Register-AzAutomationScheduledRunbook -AutomationAccountName $aaName `
+        -ResourceGroupName $rgName `
+        -RunbookName $runbookName `
+        -ScheduleName $s.Name `
+        -Parameters @{ Action=$action; VMList=$vms; RG=$rgName } | Out-Null
 }
 
-# -------- Auto Start/Stop Schedules --------
-foreach($vm in $vmList){
+# DC @ 07:00
+New-PenLabSchedule -name "PenLabStart-DC01"   -time "07:00" -action "Start" -vms @("SAZS-PENLAB-DC01")
 
-    $autoRg = $rgName
+# Others @ 07:05
+$others = @("SAZS-PENLAB-S19","SAZS-PENLAB-S22","SAZS-PENLAB-H01","SAZS-PENLAB-C11")
+New-PenLabSchedule -name "PenLabStart-Others" -time "07:05" -action "Start" -vms $others
 
-    # BOOT
-    New-AzAutomationScheduledRunbook -ResourceGroupName $autoRg `
-        -AutomationAccountName "AA-PenLab" `
-        -Name "start_$($vm.Name)" `
-        -ScheduleName "sch_start_$($vm.Name)" `
-        -RunbookName "Start-AzVM" `
-        -Parameters @{ ResourceGroupName=$rgName; Name=$vm.Name }
+# All stop @ 19:00
+$all = @("SAZS-PENLAB-DC01","SAZS-PENLAB-S19","SAZS-PENLAB-S22","SAZS-PENLAB-H01","SAZS-PENLAB-C11")
+New-PenLabSchedule -name "PenLabStop-All"     -time "19:00" -action "Stop"  -vms $all
+#endregion
 
-    # SHUTDOWN
-    New-AzAutomationScheduledRunbook -ResourceGroupName $autoRg `
-        -AutomationAccountName "AA-PenLab" `
-        -Name "stop_$($vm.Name)" `
-        -ScheduleName "sch_stop_$($vm.Name)" `
-        -RunbookName "Stop-AzVM" `
-        -Parameters @{ ResourceGroupName=$rgName; Name=$vm.Name }
-}
-
-Write-Output "PenLab build complete."
+Write-Host "PenLab deployment completed successfully." -ForegroundColor Green

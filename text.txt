@@ -1,380 +1,163 @@
 <#
-Name:    deploy.ps1
+Name:    deploy_penlab.ps1
 Version: 1.0
-Author:  Daniel Wink (Cloud Services)
-Date:    2025-1-7
-Purpose: Deploy Cohesity Cloud Services Infrastructure
+Author:  Anthony’s AI Sidekick
+Date:    2025-1-18
+Purpose: Deploy Penetration Lab Infrastructure (Staging)
 
-Pre-req:    latest Az powershell modules
-            GA is needed for the app reg via Cohesity Console
-            temporary CAP bypass is also needed via AAD Group 'AAD_CAP_DeviceLoc&Enroll_UserExclusions'
-
-To Do: 
-
-Manual steps:   1 Manual App Registration with custom role/permissions & Secret Generation
-                1 App Registration from the Cohesity Console using GA role
-
-                From Cohesity Cloud console, deploy (2) SaaS Connectors
-                A SaaS Connector will be deployed to each region (eus2 & central)
-                The IaC below will deploy the needed resources to support the SaaS Connectors
-
+Pre-req: Latest Az modules, existing Subscription & MG
 #>
 
-#connect to tenant and marketing subscription
 Update-AzConfig -EnableLoginByWam $false
 
-Connect-AzAccount -Subscription sub_InfoTech -Tenant ssbstg.onmicrosoft.com
-#Connect-AzAccount -Subscription sub_InfoTech -Tenant southstatebank.onmicrosoft.com
+# -------- Connect to tenant + subscription --------
+Connect-AzAccount -Subscription sub_Infosec -Tenant ssbstg.onmicrosoft.com
 
-#region Register required providers
-#Register-AzResourceProvider -ProviderNamespace Microsoft.Storage
-#endregion
+# -------- Region Toggle --------
+$locName = "eastus2"
+$regName = "eus2"
+$tntName = "stg"
 
-#region Toggle Build Variables
-$locName = "centralus" # eastus2 | centralus 
-$tntName = "prd" # stg | prd
-$regName = $($locName.Replace("entral","")).Replace("ast","")
-#endRegion
+# -------- Naming --------
+$projName = "PenLab"
+$rgName = "rg_${regName}_${projName}"
+$vnetName = "vnet_${regName}_${projName}"
+$snName = "snet_${regName}_${projName}"
+$rtName = "rt_${regName}_${projName}"
+$nsgName = "nsg_${regName}_${projName}"
 
-#region Project Name Variables
-$projName = "Cohesity"
-$rgName = "rg_$(($regName).toUpper())_$($projName)" 
-$nsgName = "nsg_$($regName)_$($projName)"
-$rtName = "rt_$($regName)_$($projName)"
-$vnetName = "vnet_$($regName)-$($projName)"
-$snName1 = "snet_$($regName)_at-$($projName)"
-$snName2 = "snet_$($regName)_dt-$($projName)"
-$managedIdentity = "id_$($regName)_$($projName)"
+# -------- Network Prefixes --------
+$addrSpace = "10.199.70.96/27"
+$subnetPrefix = "10.199.70.96/27"
 
-$ipRFC =  @("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+# -------- Create Resource Group --------
+Set-AzContext -Subscription sub_Infosec
+New-AzResourceGroup -Name $rgName -Location $locName
 
-#detect region and tenant to set network specific params
-if($locName -eq "eastus2" -and $tntName -eq "stg"){
-    $addrSpace = "10.199.68.32/27"
-    $ipPrivate = @("10.199.68.32/28","10.199.68.48/28")
-    #$sqlName = "sql-$($regName)-SAZE-$($projName)-D01".ToLower()
-    $nexthop = "10.199.64.60"
-    $DnsServer = "10.199.64.228" #saze-mps-a01
-    $DnsServers = @("10.199.64.228","10.199.192.228") #saze-mps-a01 & sazc-mps-a01
-}
-
-if($locName -eq "centralus" -and $tntName -eq "stg"){
-    $addrSpace = "10.199.196.32/27"
-    $ipPrivate = @("10.199.196.32/28","10.199.196.48/28")
-    #$sqlName = "sql-$($regName)-SAZC-$($projName)-D01".ToLower()
-    $nexthop = "10.199.192.60"
-    $DnsServer = "10.199.192.228" #sazc-mps-a01
-    $DnsServers = @("10.199.64.228","10.199.192.228") #saze-mps-a01 & sazc-mps-a01
-}
-
-if($locName -eq "eastus2" -and $tntName -eq "prd"){
-    $addrSpace = "10.199.4.32/27"
-    $ipPrivate = @("10.199.4.32/28","10.199.4.48/28")
-    #$sqlName = "sql-$($regName)-PAZE-$($projName)-D01".ToLower()
-    $nexthop = "10.199.0.60"
-    $DnsServer = "10.199.0.228" #paze-mps-a01
-    $DnsServers = @("10.199.0.228","10.199.128.228") #paze-mps-a01 & pazc-mps-a01
-}
-
-if($locName -eq "centralus" -and $tntName -eq "prd"){
-    $addrSpace = "10.199.132.32/27"
-    $ipPrivate = @("10.199.132.32/28","10.199.132.48/28")
-    #$sqlName = "sql-$($regName)-PAZC-$($projName)-D01".ToLower()
-    $nexthop = "10.199.128.60"
-    $DnsServer = "10.199.128.228" #pazc-mps-a01
-    $DnsServers = @("10.199.0.228","10.199.128.228") #paze-mps-a01 & pazc-mps-a01
-}
-#endregion
-
-#Region RG & Managed Identity
-Set-AzContext -Subscription "sub_InfoTech"
-New-AzResourceGroup -name $rgName -Location $locName
-
-New-AzUserAssignedIdentity -ResourceGroupName $rgName -Name $managedIdentity -Location $locName
-#endregion
-
-
-
-
-#Region Networking
-#$rt = Get-AzRouteTable -Name $rtname -ResourceGroupName $rgName 
+# -------- Route Table --------
 $rt = New-AzRouteTable -Name $rtName -ResourceGroupName $rgName -Location $locName
-Add-AzRouteConfig -RouteTable $rt -Name "vnet1" -AddressPrefix $ipPrivate[0] -NextHopType VirtualAppliance -NextHopIpAddress $nexthop
-Add-AzRouteConfig -RouteTable $rt -Name "vnet2" -AddressPrefix $ipPrivate[1] -NextHopType VirtualAppliance -NextHopIpAddress $nexthop
-Set-AzRouteTable -RouteTable $rt
 
+# -------- NSG --------
 $nsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location $locName
-#$nsg = Get-AzNetworkSecurityGroup -name $nsgName -ResourceGroupName $rgName 
 
+# Inbound deny
 $p = @{
     NetworkSecurityGroup = $nsg
     Direction = "Inbound"
-    Priority = 100
-    Name = "Allow-LB-In"
-    SourceAddressPrefix = "AzureLoadBalancer"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "VirtualNetwork" 
+    Priority = 4096
+    Name = "Deny-All-In"
+    SourceAddressPrefix = "*"
+    SourcePortRange = "*"
+    DestinationAddressPrefix = "*"
     DestinationPortRange = "*"
     Protocol = "*"
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg
-    Direction = "Inbound"
-    Priority = 110
-    Name = "Allow-ICMP-In"
-    SourceAddressPrefix = $ipRFC
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "VirtualNetwork" 
-    DestinationPortRange = "*"
-    Protocol = "Icmp"
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg
-    Direction = "Inbound"
-    Priority = 800
-    Name = "Allow-Tanium-In"
-    SourceAddressPrefix = "*"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "*" 
-    DestinationPortRange = "17472"
-    Protocol = "Tcp"
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-[array]$CohesityPortsIn = 80, 443, 11113, 11117
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Inbound"
-    Priority = 900 
-    Name = "Allow-Cohesity-In" 
-    SourceAddressPrefix = $ipRFC
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "VirtualNetwork" 
-    DestinationPortRange = $CohesityPortsIn
-    Protocol = "Tcp" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Inbound" 
-    Priority = 1100
-    Name = "Allow-MSSQL-In"
-    SourceAddressPrefix = "VirtualNetwork" 
-    SourcePortRange = "*"
-    DestinationAddressPrefix = $ipPrivate[1] 
-    DestinationPortRange = "1433"
-    Protocol = "Tcp"
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Inbound" 
-    Priority = 4096 
-    Name = "Deny-All-In" 
-    SourceAddressPrefix = "*"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "*" 
-    DestinationPortRange = "*" 
-    Protocol = "*" 
     Access = "Deny"
 }
 Add-AzNetworkSecurityRuleConfig @p
+
+# Outbound deny
 $p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 100 
-    Name = "Allow-LB-Out" 
-    SourceAddressPrefix = "VirtualNetwork" 
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "AzureLoadBalancer" 
-    DestinationPortRange = "*" 
-    Protocol = "*" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 110 
-    Name = "Allow-ICMP-Out" 
-    SourceAddressPrefix = "VirtualNetwork"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = $ipRFC
-    DestinationPortRange = "*" 
-    Protocol = "Icmp" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 200 
-    Name = "Allow-DNS-Out" 
-    SourceAddressPrefix = "VirtualNetwork"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = $DnsServers 
-    DestinationPortRange = 53 
-    Protocol = "*" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-[array]$TaniumPorts = 443, 17472, 17486
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 800
-    Name = "Allow-Tanium-Out" 
-    SourceAddressPrefix = "VirtualNetwork"
-    SourcePortRange = "*"
-    DestinationAddressPrefix = "*" 
-    DestinationPortRange = $TaniumPorts
-    Protocol = "Tcp" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-[array]$CohesityPortsOut = 443, 11117, 50051
-$p = @{
-    NetworkSecurityGroup = $nsg 
+    NetworkSecurityGroup = $nsg
     Direction = "Outbound"
-    Priority = 900 
-    Name = "Allow-Cohesity-Out" 
+    Priority = 4096
+    Name = "Deny-All-Out"
     SourceAddressPrefix = "*"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "VirtualNetwork" 
-    DestinationPortRange = $CohesityPortsOut
-    Protocol = "Tcp" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-[array]$IntraVnetPortsOut = 443
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 1000 
-    Name = "Allow-IntraVnet-Out" 
-    SourceAddressPrefix = "VirtualNetwork"
     SourcePortRange = "*"
-    DestinationAddressPrefix = "*" 
-    DestinationPortRange = $IntraVnetPortsOut
-    Protocol = "Tcp" 
-    Access = "Allow"
-}
-Add-AzNetworkSecurityRuleConfig @p
-$p = @{
-    NetworkSecurityGroup = $nsg 
-    Direction = "Outbound" 
-    Priority = 4096 
-    Name = "Deny-All-Out" 
-    SourceAddressPrefix = "*"
-    SourcePortRange = "*" 
-    DestinationAddressPrefix = "*" 
-    DestinationPortRange = "*" 
-    Protocol = "*" 
+    DestinationAddressPrefix = "*"
+    DestinationPortRange = "*"
+    Protocol = "*"
     Access = "Deny"
 }
 Add-AzNetworkSecurityRuleConfig @p
+
 Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
 
+# -------- VNet + Subnet --------
 $p = @{
     Name = $vnetName
     ResourceGroup = $rgName
     Location = $locName
     AddressPrefix = $addrSpace
-    DnsServer = $DnsServer
 }
 $vnet = New-AzVirtualNetwork @p
 
 $p = @{
     VirtualNetwork = $vnet
-    Name = $snName1 #snet_*_at-Cohesity
-    AddressPrefix = $ipPrivate[0]
-    RouteTable = $rt 
+    Name = $snName
+    AddressPrefix = $subnetPrefix
     NetworkSecurityGroup = $nsg
+    RouteTable = $rt
 }
 Add-AzVirtualNetworkSubnetConfig @p
-$p = @{
-    VirtualNetwork = $vnet
-    Name = $snName2 #snet_*_dt-Cohesity
-    AddressPrefix = $ipPrivate[1] 
-    ServiceEndpoint = @("Microsoft.Sql") 
-    RouteTable = $rt 
-    NetworkSecurityGroup = $nsg
-}
-Add-AzVirtualNetworkSubnetConfig @p
+
 $vnet = Set-AzVirtualNetwork -VirtualNetwork $vnet
 
-#$vnet = Get-AzVirtualNetwork -ResourceGroupName $rgName -Name $vnetName
-Set-AzContext -Subscription "sub_InfoTech"
-$p = @{
-    Name = "peer_$($regName)_$($projName)2hub"
-    VirtualNetwork = $vnet
-    RemoteVirtualNetworkId = $(Get-AzVirtualNetwork -Name "vnet_centralus_hub_01" -ResourceGroupName "rg_$($regName)_TransitHub").Id
-}
+# -------- VM Definitions --------
+$adminUser = "locala"
+$winPassword = Read-Host -Prompt "Enter password for Windows VMs" -AsSecureString
+$sshKey = Get-Content -Path "~/.ssh/id_rsa.pub"
 
-Add-AzVirtualNetworkPeering @p
+$vmList = @(
+    @{ Name="SAZS-PENLAB-DC01"; Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:00"; Shutdown="19:00" }
+    @{ Name="SAZS-PENLAB-H01";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
+    @{ Name="SAZS-PENLAB-S19";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
+    @{ Name="SAZS-PENLAB-S22";  Image="MicrosoftWindowsServer:WindowsServer:2022-datacenter:latest"; Boot="07:05"; Shutdown="19:00" }
+    @{ Name="SAZS-PENLAB-LNX01"; Image="RedHat:RHEL:9-lvm-gen2:latest"; Boot="07:05"; Shutdown="19:00" }
+)
 
-# was getting errors with peering when running back to back with above ^ cmd."
-Write-Output "pausing for 60 seconds before proceeding."
-start-sleep -Seconds 60
+# -------- Deploy VMs --------
+foreach($vm in $vmList) {
 
+    $nicName = "nic_$($vm.Name)"
+    $ipName = "ip_$($vm.Name)"
 
-$p = @{
-    Name = "peer_$($regName)_hub2$($projName)"
-    RemoteVirtualNetworkId = $vnet.Id
-    VirtualNetwork = $(Get-AzVirtualNetwork -Name "vnet_centralus_hub_01" -ResourceGroupName "rg_$($regName)_TransitHub")
-}
-Add-AzVirtualNetworkPeering @p
+    # Public IP (None for PenLab)
+    $pip = New-AzPublicIpAddress -Name $ipName -ResourceGroupName $rgName -Location $locName -Sku Basic -AllocationMethod Static
 
-#endregion
+    # NIC
+    $nic = New-AzNetworkInterface -Name $nicName -ResourceGroupName $rgName -Location $locName -SubnetId $vnet.Subnets[0].Id -PublicIpAddress $pip
 
+    # VM config
+    $vmConfig = New-AzVMConfig -VMName $vm.Name -VMSize "Standard_DS1_v2"
 
-#region NSG rules run once - ONLY RUN ONCE, don't re-run when toggling region like the rest above^^^^^^
-#will just error with dupes if ran twice, no big deal.
-#inline list of NSGs to update with inbound Cohesity rule.
-$NSGs2Mod = @"
-nsg_eus2_forcepoint
-nsg_eus2_transit
-nsg_eus2_paloalto
-nsg_eus2_kentico
-nsg_eus2_pt-APIManagement
-nsg_cus_forcepoint
-nsg_cus_transit
-nsg_cus_paloalto
-nsg_cus_kentico
-nsg_cus_pt-APIManagement
-"@
-
-$NSGs2Mod = $($NSGs2Mod -Split "`n").TrimEnd("`r").Trim()
-
-$azSubs = get-azsubscription | Select-Object -ExpandProperty name
-
-foreach( $azSub in $azSubs ) {
-    Set-AzContext -Subscription $azSub | out-null
-    Start-Sleep -Seconds 5
-    $azNsgs = Get-AzNetworkSecurityGroup | ? {$NSGs2Mod -contains $_.Name}
-
-        foreach ( $azNsg in $azNsgs ) {
-        write-output "adding inbound rule for Cohesity to $($aznsg.name)"
-        #Add inbound rule
-        $p = @{
-            NetworkSecurityGroup = $azNsg
-            Direction = "Inbound"
-            Priority = 900
-            Name = "Allow-Cohesity-In"
-            SourceAddressPrefix = "*"
-            SourcePortRange = "*" 
-            DestinationAddressPrefix = "*" 
-            DestinationPortRange = "50051"
-            Protocol = "TCP"
-            Access = "Allow"
-        }
-       Add-AzNetworkSecurityRuleConfig @p  | Set-AzNetworkSecurityGroup
+    if($vm.Name -eq "SAZS-PENLAB-LNX01"){
+        # Linux
+        $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $vm.Name -Credential (New-Object System.Management.Automation.PSCredential($adminUser,(ConvertTo-SecureString "placeholder" -AsPlainText -Force))) -DisablePasswordAuthentication
+        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName ($vm.Image.Split(":")[0]) -Offer ($vm.Image.Split(":")[1]) -Skus ($vm.Image.Split(":")[2]) -Version "latest"
+        Add-AzVMSSHKey -VM $vmConfig -KeyData $sshKey -Path "/home/$adminUser/.ssh/authorized_keys"
     }
- }
-#endregion
+    else {
+        # Windows
+        $cred = New-Object System.Management.Automation.PSCredential($adminUser, $winPassword)
+        $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Windows -ComputerName $vm.Name -Credential $cred
+        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName ($vm.Image.Split(":")[0]) -Offer ($vm.Image.Split(":")[1]) -Skus ($vm.Image.Split(":")[2]) -Version "latest"
+    }
+
+    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+
+    New-AzVM -ResourceGroupName $rgName -Location $locName -VM $vmConfig
+}
+
+# -------- Auto Start/Stop Schedules --------
+foreach($vm in $vmList){
+
+    $autoRg = $rgName
+
+    # BOOT
+    New-AzAutomationScheduledRunbook -ResourceGroupName $autoRg `
+        -AutomationAccountName "AA-PenLab" `
+        -Name "start_$($vm.Name)" `
+        -ScheduleName "sch_start_$($vm.Name)" `
+        -RunbookName "Start-AzVM" `
+        -Parameters @{ ResourceGroupName=$rgName; Name=$vm.Name }
+
+    # SHUTDOWN
+    New-AzAutomationScheduledRunbook -ResourceGroupName $autoRg `
+        -AutomationAccountName "AA-PenLab" `
+        -Name "stop_$($vm.Name)" `
+        -ScheduleName "sch_stop_$($vm.Name)" `
+        -RunbookName "Stop-AzVM" `
+        -Parameters @{ ResourceGroupName=$rgName; Name=$vm.Name }
+}
+
+Write-Output "PenLab build complete."

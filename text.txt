@@ -1,54 +1,39 @@
-param(
-    # Resource group that contains the VMs
-    [Parameter(Mandatory = $true)]
-    [string]$ResourceGroupName,
-
-    # One or more VM names
-    [Parameter(Mandatory = $true)]
-    [string[]]$VMNames,
-
-    # What to do: Start or Stop
-    [Parameter(Mandatory = $true)]
-    [ValidateSet("Start", "Stop")]
-    [string]$Action
-)
-
-# Connect using the Automation Account's managed identity
-# (Make sure you've enabled System-assigned identity and given it
-# at least "Virtual Machine Contributor" on the RG or subscription.)
-Connect-AzAccount -Identity
-
-foreach ($vmName in $VMNames) {
-    try {
-        $vm = Get-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -Status -ErrorAction Stop
-        $powerState = ($vm.Statuses | Where-Object { $_.Code -like "PowerState/*" }).DisplayStatus
-
-        Write-Output "[$vmName] Current state: $powerState"
-
-        switch ($Action) {
-            "Start" {
-                if ($powerState -eq "VM running") {
-                    Write-Output "[$vmName] Already running. Skipping."
-                }
-                else {
-                    Write-Output "[$vmName] Starting..."
-                    Start-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
-                    Write-Output "[$vmName] Start command sent."
-                }
-            }
-            "Stop" {
-                if ($powerState -eq "VM deallocated" -or $powerState -eq "VM stopped") {
-                    Write-Output "[$vmName] Already stopped/deallocated. Skipping."
-                }
-                else {
-                    Write-Output "[$vmName] Stopping (deallocating)..."
-                    Stop-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -Force -ErrorAction Stop
-                    Write-Output "[$vmName] Stop command sent."
-                }
-            }
-        }
-    }
-    catch {
-        Write-Error "[$vmName] Failed to $Action. Error: $($_.Exception.Message)"
-    }
-}
+-----BEGIN RSA PRIVATE KEY-----
+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
+-----END RSA PRIVATE KEY-----

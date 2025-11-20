@@ -1,39 +1,95 @@
------BEGIN RSA PRIVATE KEY-----
-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
------END RSA PRIVATE KEY-----
+# ============================================
+# 1. Get Azure Access Token via Managed Identity
+# ============================================
+$token = (Invoke-RestMethod -Method GET -Headers @{Metadata="true"} `
+  -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2019-08-01&resource=https%3A%2F%2Fmanagement.azure.com%2F"
+).access_token
+
+$authHeader = @{ Authorization = "Bearer $token" }
+
+
+# ============================================
+# 2. Get all subscriptions this VM can access
+# ============================================
+$subsUrl = "https://management.azure.com/subscriptions?api-version=2020-01-01"
+$subs = (Invoke-RestMethod -Headers $authHeader -Uri $subsUrl).value
+
+
+# Prepare results
+$results = @()
+
+
+# ============================================
+# 3. Loop through each subscription
+# ============================================
+foreach ($sub in $subs) {
+
+    Write-Host "`n== Subscription: $($sub.displayName) ==" -ForegroundColor Cyan
+
+    # List all storage accounts
+    $saUrl = "https://management.azure.com/subscriptions/$($sub.subscriptionId)/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01"
+    $storageAccounts = (Invoke-RestMethod -Headers $authHeader -Uri $saUrl).value
+
+    foreach ($sa in $storageAccounts) {
+        $saName = $sa.name
+        $rg     = $sa.id.Split("/")[4]
+
+        Write-Host "  Storage Account: $saName" -ForegroundColor Yellow
+
+        # ============================================
+        # 4. Get Storage Account Keys
+        # ============================================
+        $keysUrl = "https://management.azure.com$($sa.id)/listKeys?api-version=2023-01-01"
+        $keys = (Invoke-RestMethod -Headers $authHeader -Method POST -Uri $keysUrl).keys
+        $key = $keys[0].value
+
+        # ============================================
+        # 5. List containers
+        # ============================================
+        $containerUrl = "https://$saName.blob.core.windows.net?comp=list&restype=container"
+        $xml = Invoke-RestMethod -Uri $containerUrl `
+            -Headers @{ "x-ms-version"="2020-10-02"; "x-ms-date"=(Get-Date).ToUniversalTime().ToString("R"); "Authorization"="" } `
+            -Method GET `
+            -Authentication Basic `
+            -Credential (New-Object System.Management.Automation.PSCredential("unused", (ConvertTo-SecureString $key -AsPlainText -Force)))
+
+        $totalBlobs = 0
+
+        foreach ($container in $xml.EnumerationResults.Containers.Container) {
+            $cname = $container.Name
+
+            # ============================================
+            # 6. Count blobs in this container
+            # ============================================
+            $blobUrl = "https://$saName.blob.core.windows.net/$cname?restype=container&comp=list"
+            $bxml = Invoke-RestMethod -Uri $blobUrl `
+                -Headers @{ "x-ms-version"="2020-10-02"; "x-ms-date"=(Get-Date).ToUniversalTime().ToString("R"); "Authorization"="" } `
+                -Method GET `
+                -Authentication Basic `
+                -Credential (New-Object System.Management.Automation.PSCredential("unused", (ConvertTo-SecureString $key -AsPlainText -Force)))
+
+            $count = $bxml.EnumerationResults.Blobs.Blob.Count
+            if ($count -eq $null) { $count = 0 }
+
+            $totalBlobs += $count
+        }
+
+        # Store result
+        $results += [PSCustomObject]@{
+            Subscription       = $sub.displayName
+            ResourceGroup      = $rg
+            StorageAccount     = $saName
+            BlobCount          = $totalBlobs
+        }
+
+        Write-Host "    Total Blobs: $totalBlobs"
+    }
+}
+
+# ============================================
+# 7. Export results
+# ============================================
+$results | Format-Table -AutoSize
+$results | Export-Csv -NoTypeInformation "./blob-count-results.csv"
+
+Write-Host "`nDONE! Output written to blob-count-results.csv" -ForegroundColor Green

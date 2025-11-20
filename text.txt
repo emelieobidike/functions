@@ -1,32 +1,43 @@
 param(
     [string]$ResourceGroupName,
-    [string[]]$VMNames,
-    [ValidateSet("Start", "Stop")]
+    [string]$VMNames,
     [string]$Action
 )
 
-Write-Output "=== DEBUG RUN START ==="
-Write-Output "ResourceGroupName = $ResourceGroupName"
-Write-Output "VMNames = $($VMNames -join ', ')"
-Write-Output "Action = $Action"
+$ErrorActionPreference = "Stop"
+
+# Normalize parameters
+$ResourceGroupName = $ResourceGroupName.Trim()
+$Action = $Action.Trim().ToLower()
+$VMNames = $VMNames.Split(",") | ForEach-Object { $_.Trim() }
+
+Write-Output "Starting runbook..."
+Write-Output "Resource Group: $ResourceGroupName"
+Write-Output "VMs: $($VMNames -join ', ')"
+Write-Output "Action: $Action"
 
 Connect-AzAccount -Identity
-Write-Output "Authenticated as:"
-(Get-AzContext).Account | Format-List
 
 foreach ($vmName in $VMNames) {
+    Write-Output "`nProcessing VM: $vmName"
 
-    Write-Output "Trying to get VM: $vmName"
+    $vm = Get-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
 
-    try {
-        $vm = Get-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
-        Write-Output "Found VM: $($vm.Name)"
+    switch ($Action) {
+        "start" {
+            Write-Output "Starting $vmName..."
+            Start-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+        }
+        "stop" {
+            Write-Output "Stopping $vmName..."
+            Stop-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -Force -ErrorAction Stop
+        }
+        default {
+            throw "Invalid action '$Action'. Use Start or Stop."
+        }
     }
-    catch {
-        Write-Output "❌ FAILED to get VM: $vmName"
-        Write-Output "ERROR: $($_.Exception.Message)"
-        throw  # force job to surface the error
-    }
+
+    Write-Output "$vmName: Completed action '$Action'"
 }
 
-Write-Output "=== DEBUG RUN END ==="
+Write-Output "`nRunbook completed successfully."

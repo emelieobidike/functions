@@ -1,95 +1,32 @@
-# ============================================
-# 1. Get Azure Access Token via Managed Identity
-# ============================================
-$token = (Invoke-RestMethod -Method GET -Headers @{Metadata="true"} `
-  -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2019-08-01&resource=https%3A%2F%2Fmanagement.azure.com%2F"
-).access_token
+param(
+    [string]$ResourceGroupName,
+    [string[]]$VMNames,
+    [ValidateSet("Start", "Stop")]
+    [string]$Action
+)
 
-$authHeader = @{ Authorization = "Bearer $token" }
+Write-Output "=== DEBUG RUN START ==="
+Write-Output "ResourceGroupName = $ResourceGroupName"
+Write-Output "VMNames = $($VMNames -join ', ')"
+Write-Output "Action = $Action"
 
+Connect-AzAccount -Identity
+Write-Output "Authenticated as:"
+(Get-AzContext).Account | Format-List
 
-# ============================================
-# 2. Get all subscriptions this VM can access
-# ============================================
-$subsUrl = "https://management.azure.com/subscriptions?api-version=2020-01-01"
-$subs = (Invoke-RestMethod -Headers $authHeader -Uri $subsUrl).value
+foreach ($vmName in $VMNames) {
 
+    Write-Output "Trying to get VM: $vmName"
 
-# Prepare results
-$results = @()
-
-
-# ============================================
-# 3. Loop through each subscription
-# ============================================
-foreach ($sub in $subs) {
-
-    Write-Host "`n== Subscription: $($sub.displayName) ==" -ForegroundColor Cyan
-
-    # List all storage accounts
-    $saUrl = "https://management.azure.com/subscriptions/$($sub.subscriptionId)/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01"
-    $storageAccounts = (Invoke-RestMethod -Headers $authHeader -Uri $saUrl).value
-
-    foreach ($sa in $storageAccounts) {
-        $saName = $sa.name
-        $rg     = $sa.id.Split("/")[4]
-
-        Write-Host "  Storage Account: $saName" -ForegroundColor Yellow
-
-        # ============================================
-        # 4. Get Storage Account Keys
-        # ============================================
-        $keysUrl = "https://management.azure.com$($sa.id)/listKeys?api-version=2023-01-01"
-        $keys = (Invoke-RestMethod -Headers $authHeader -Method POST -Uri $keysUrl).keys
-        $key = $keys[0].value
-
-        # ============================================
-        # 5. List containers
-        # ============================================
-        $containerUrl = "https://$saName.blob.core.windows.net?comp=list&restype=container"
-        $xml = Invoke-RestMethod -Uri $containerUrl `
-            -Headers @{ "x-ms-version"="2020-10-02"; "x-ms-date"=(Get-Date).ToUniversalTime().ToString("R"); "Authorization"="" } `
-            -Method GET `
-            -Authentication Basic `
-            -Credential (New-Object System.Management.Automation.PSCredential("unused", (ConvertTo-SecureString $key -AsPlainText -Force)))
-
-        $totalBlobs = 0
-
-        foreach ($container in $xml.EnumerationResults.Containers.Container) {
-            $cname = $container.Name
-
-            # ============================================
-            # 6. Count blobs in this container
-            # ============================================
-            $blobUrl = "https://$saName.blob.core.windows.net/$cname?restype=container&comp=list"
-            $bxml = Invoke-RestMethod -Uri $blobUrl `
-                -Headers @{ "x-ms-version"="2020-10-02"; "x-ms-date"=(Get-Date).ToUniversalTime().ToString("R"); "Authorization"="" } `
-                -Method GET `
-                -Authentication Basic `
-                -Credential (New-Object System.Management.Automation.PSCredential("unused", (ConvertTo-SecureString $key -AsPlainText -Force)))
-
-            $count = $bxml.EnumerationResults.Blobs.Blob.Count
-            if ($count -eq $null) { $count = 0 }
-
-            $totalBlobs += $count
-        }
-
-        # Store result
-        $results += [PSCustomObject]@{
-            Subscription       = $sub.displayName
-            ResourceGroup      = $rg
-            StorageAccount     = $saName
-            BlobCount          = $totalBlobs
-        }
-
-        Write-Host "    Total Blobs: $totalBlobs"
+    try {
+        $vm = Get-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+        Write-Output "Found VM: $($vm.Name)"
+    }
+    catch {
+        Write-Output "❌ FAILED to get VM: $vmName"
+        Write-Output "ERROR: $($_.Exception.Message)"
+        throw  # force job to surface the error
     }
 }
 
-# ============================================
-# 7. Export results
-# ============================================
-$results | Format-Table -AutoSize
-$results | Export-Csv -NoTypeInformation "./blob-count-results.csv"
-
-Write-Host "`nDONE! Output written to blob-count-results.csv" -ForegroundColor Green
+Write-Output "=== DEBUG RUN END ==="

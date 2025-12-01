@@ -60,3 +60,11 @@ Rollback is limited to removing newly created Azure resources and reverting Bomg
 • Validate that logs appear in CrowdStrike LogScale.
 • Ensure log ingestion volume and performance are comparable to expected production load.
 • Document test results and obtain approval from Security Operations.
+
+
+
+This change involves deploying a LogScale (CrowdStrike LogScale) collector server in Microsoft Azure to enable ingestion of Bomgar syslog events into CrowdStrike.
+
+As part of the implementation, a new Red Hat Enterprise Linux (RHEL) virtual machine will be provisioned in Azure and configured as the LogScale server. A dedicated, isolated Azure virtual network and subnet will also be created to host the server and restrict access.
+
+The server will receive syslog messages from the Bomgar appliance and securely forward the logs into CrowdStrike LogScale for centralized monitoring and analysis. No existing systems will be modified. This change introduces a new infrastructure component and accompanying network resources to support secure log ingestion.

@@ -1,70 +1,20 @@
-✅ Change Title
+param(
+    [string]$VMNames   # raw input from automation (usually a single string)
+)
 
-Deployment of Azure LogScale Server and Network Resources for Bomgar Syslog Ingestion into CrowdStrike
+Write-Output "RAW INPUT: $VMNames"
+Write-Output "RAW TYPE:  $($VMNames.GetType().FullName)"
 
-⸻
+# --- Normalization / Parsing ---
+$clean = $VMNames -replace '^\s*\[|\]\s*$',''     # remove starting/ending brackets
+$clean = $clean -replace "`r","" -replace "`n","" # remove newlines
 
-✅ Justification (Why is the change needed?)
+# split on comma, pipe, or semicolon
+$VMArray = ($clean -split '[,|;]') |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne '' }
 
-The change is required to enable centralized logging and security monitoring of Bomgar activity within CrowdStrike LogScale. Bomgar does not currently send logs to CrowdStrike, creating a visibility gap for security operations.
-
-Deploying a dedicated LogScale collector server in Azure—along with an isolated virtual network—provides a secure and controlled path for ingesting Bomgar syslogs. This ensures compliance with internal logging requirements, improves incident detection capabilities, and supports overall security posture enhancement.
-
-⸻
-
-✅ Implementation Plan (Steps required, who is involved, communications, etc.)
-
-	1.	Provision a new isolated Azure virtual network and a dedicated subnet for the LogScale server.
-	2.	Deploy a new RHEL (Red Hat Enterprise Linux) virtual machine in Azure to serve as the LogScale syslog collector.
-	3.	Harden and configure the server, including OS updates, restricted NSG rules, and log collector packages.
-	4.	Install and configure CrowdStrike LogScale Collector on the VM.
-	5.	Configure Bomgar to forward syslogs to the new collector server.
-	6.	Test connectivity and log ingestion, ensuring logs are successfully forwarded from Bomgar into CrowdStrike LogScale.
-	7.	Document configuration and validate monitoring visibility with Security Operations.
-
-Implementation will be completed by the internal engineering team (SSB). No end users are directly impacted, and no outages are expected. Communications will be internal within the Infrastructure and Security teams.
-
-⸻
-
-✅ Risk and Impact Analysis
-
-Impact:
-No production systems or users are directly impacted, as this is a new isolated server and network build. Existing services (Bomgar, CrowdStrike) will not experience downtime.
-
-Risks:
-• Misconfiguration of network rules may temporarily prevent syslog forwarding.
-• Incorrect LogScale Collector configuration could delay log ingestion.
-
-Mitigation:
-• All configurations will be validated in a controlled test prior to enabling Bomgar syslog forwarding.
-• Network rules and collector settings will be peer-reviewed.
-• No existing systems are modified, minimizing overall risk.
-
-⸻
-
-✅ Backout Plan
-
-If the change is not successful, the deployed Azure resources (VM, VNet, subnet, and associated components) will be deleted and log forwarding will remain in its current state.
-
-No interruption to Bomgar or CrowdStrike services will occur, as the configuration does not replace or modify any existing infrastructure.
-
-Rollback is limited to removing newly created Azure resources and reverting Bomgar log settings (if applied).
-
-⸻
-
-✅ Test Plan
-
-• Validate that the Azure VM is reachable and fully patched.
-• Confirm LogScale Collector installation completion and verify service status.
-• Configure Bomgar to send sample syslog events to the collector and confirm receipt using system logs.
-• Validate that logs appear in CrowdStrike LogScale.
-• Ensure log ingestion volume and performance are comparable to expected production load.
-• Document test results and obtain approval from Security Operations.
-
-
-
-This change involves deploying a LogScale (CrowdStrike LogScale) collector server in Microsoft Azure to enable ingestion of Bomgar syslog events into CrowdStrike.
-
-As part of the implementation, a new Red Hat Enterprise Linux (RHEL) virtual machine will be provisioned in Azure and configured as the LogScale server. A dedicated, isolated Azure virtual network and subnet will also be created to host the server and restrict access.
-
-The server will receive syslog messages from the Bomgar appliance and securely forward the logs into CrowdStrike LogScale for centralized monitoring and analysis. No existing systems will be modified. This change introduces a new infrastructure component and accompanying network resources to support secure log ingestion.
+Write-Output "---- RESULT ----"
+Write-Output "ARRAY LENGTH: $($VMArray.Count)"
+Write-Output "ARRAY CONTENT: $($VMArray -join ', ')"
+Write-Output "TYPE OF ARRAY ELEMENTS: $($VMArray.GetType().FullName)"

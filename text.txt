@@ -1,20 +1,66 @@
 param(
-    [string]$VMNames   # raw input from automation (usually a single string)
+    [string]$ResourceGroupName,
+    [string]$VMNames,      # accept string input from portal/test pane
+    [string]$Action
 )
 
-Write-Output "RAW INPUT: $VMNames"
-Write-Output "RAW TYPE:  $($VMNames.GetType().FullName)"
+$ErrorActionPreference = "Stop"
 
-# --- Normalization / Parsing ---
-$clean = $VMNames -replace '^\s*\[|\]\s*$',''     # remove starting/ending brackets
+Write-Output "=== RAW PARAM DROP ==="
+Write-Output "VMNames RAW: [$VMNames]"
+Write-Output "VMNames TYPE: $($VMNames.GetType().FullName)"
+Write-Output "======================="
+
+# Normalize parameters
+$ResourceGroupName = $ResourceGroupName.Trim()
+$Action = $Action.Trim().ToLower()
+
+# Clean and split VMNames robustly (accept comma, pipe, semicolon, newlines, or bracketed JSON-like)
+$clean = $VMNames -replace '^\s*\[|\]\s*$',''     # strip surrounding brackets if present
 $clean = $clean -replace "`r","" -replace "`n","" # remove newlines
+# If the string includes quoted names like "vm1","vm2", remove extraneous quotes before splitting
+$clean = $clean -replace '"',''
+# Split on comma, pipe or semicolon, trim each, remove empties
+$VMNamesArray = ($clean -split '[,|;]') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
 
-# split on comma, pipe, or semicolon
-$VMArray = ($clean -split '[,|;]') |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ -ne '' }
+Write-Output "Starting runbook..."
+Write-Output "Resource Group: $ResourceGroupName"
+Write-Output "VMs: $($VMNamesArray -join ', ')"
+Write-Output "Action: $Action"
 
-Write-Output "---- RESULT ----"
-Write-Output "ARRAY LENGTH: $($VMArray.Count)"
-Write-Output "ARRAY CONTENT: $($VMArray -join ', ')"
-Write-Output "TYPE OF ARRAY ELEMENTS: $($VMArray.GetType().FullName)"
+# Login using managed identity (Automation hybrid worker would use -Identity)
+Connect-AzAccount -Identity
+
+foreach ($vmName in $VMNamesArray) {
+    Write-Output "`nProcessing VM: $vmName"
+
+    try {
+        # Validate VM exists
+        $vm = Get-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+
+        switch ($Action) {
+            "start" {
+                Write-Output "Starting $vmName..."
+                Start-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -ErrorAction Stop
+            }
+            "stop" {
+                Write-Output "Stopping $vmName..."
+                Stop-AzVM -Name $vmName -ResourceGroupName $ResourceGroupName -Force -ErrorAction Stop
+            }
+            default {
+                throw "Invalid action '$Action'. Use Start or Stop."
+            }
+        }
+
+        Write-Output ("{0}: Completed action {1}" -f $vmName, $Action)
+    }
+    catch {
+        # Log error but continue with next VM
+        Write-Output ("ERROR processing VM '{0}': {1}" -f $vmName, $_.Exception.Message)
+        # Optionally: write the full error
+        Write-Output ($_ | Out-String)
+        continue
+    }
+}
+
+Write-Output "`nRunbook completed successfully."

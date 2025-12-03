@@ -1,457 +1,76 @@
-<#
-Name:    deploy_penlab_dr.ps1
-Version: 1.1
-Author:  PenLab DR Builder (generated)
-Date:    2025-12-02
-Purpose: Disaster Recovery deployer for PenLab in EUS2 - recreates resources to match portal
-Notes:   - This script recreates resources from scratch (RG, VNet, Subnet, NSG, Route Table,
-         - Storage accounts + private endpoint (blob only) + private DNS zone link,
-         - Automation account + runbook + schedules,
-         - VNet peering to hub (cross-subscription),
-         - 5 VMs (same VM resource names; ComputerName without 'vm-eus2-' prefix).
-#>
-
-# --- Connect to target subscription for PenLab (where primary resources are) ---
-Update-AzConfig -EnableLoginByWam $false
-Connect-AzAccount
-# Ensure you are in subscription that will receive the resources (PenLab subscription)
-Set-AzContext -Subscription "sub_InfoSec"
-
-#region User-configurable variables (verify before running)
-$locName    = "eastus2"
-$rgName     = "rg_eus_PenLab"                # exact RG you provided
-$vnetName   = "vnet_eus2_PenLab"
-$snName     = "snet_eus2_PenLab"
-$nsgName    = "nsg_eus2_PenLab"
-$rtName     = "rt_eus2_PenLab"
-$peeringName= "peer_eus2_PenLab2hub"
-
-# Hub (remote) vnet (in a different subscription)
-$peerRemoteSubscription = "sub_InfoTech"
-$peerRemoteVNetRG       = "rg_EUS2_TransitHub"
-$peerRemoteVNetName     = "vnet_eus2_hub"
-
-# Addressing
-$vnetPrefix     = "10.199.70.96/27"
-$subnetPrefix   = "10.199.70.96/27"
-
-# Route table route to virtual appliance (per screenshot)
-$defaultNextHopType = "VirtualAppliance"
-$defaultNextHopIp   = "10.199.64.60"   # from screenshot
-
-# Storage accounts
-$saPrimary = "steus2stgpenlab"
-$saDiag    = "steus2stgpenlabdiag"
-
-# Private endpoint for primary SA (blob only)
-$peName = "steus2stgpenlab-pe"
-$peNicName = "steus2stgpenlab-pe-nic"
-$pePrivateIp = "10.199.70.100"
-$pePrivateDnsZone = "privatelink.blob.core.windows.net"
-
-# Automation
-$aaName = "aa-eus2-PenLab"
-$runbookName = "StartStop-PenLab"
-# Timezone in portal was Central Time (per your screenshot)
-$scheduleTimeZone = "Central Standard Time"
-
-# VM definitions (VM resource names include vm-eus2- prefix; ComputerName is portal computer name)
-$vmDefs = @(
-    [pscustomobject]@{ VmResourceName="vm-eus2-SAZE-PENLAB-K01";  ComputerName = "SAZE-PENLAB-K01"; Os="Linux";  Size="Standard_D2s_v5";   ImagePublisher="kali-linux"; ImageOffer="kali-linux"; ImageSku="kali" },  # Kali Linux (marketplace)
-    [pscustomobject]@{ VmResourceName="vm-eus2-SAZE-PENLAB-DC01"; ComputerName = "SAZE-PENLAB-DC01"; Os="Windows"; Size="Standard_D2s_v5";   ImagePublisher="MicrosoftWindowsServer"; ImageOffer="WindowsServer"; ImageSku="2022-datacenter-g2" },
-    [pscustomobject]@{ VmResourceName="vm-eus2-SAZE-PENLAB-S19"; ComputerName = "SAZE-PENLAB-S19"; Os="Windows"; Size="Standard_D2s_v5";   ImagePublisher="MicrosoftWindowsServer"; ImageOffer="WindowsServer"; ImageSku="2019-Datacenter" },
-    [pscustomobject]@{ VmResourceName="vm-eus2-SAZE-PENLAB-S22"; ComputerName = "SAZE-PENLAB-S22"; Os="Windows"; Size="Standard_D2s_v5";   ImagePublisher="MicrosoftWindowsServer"; ImageOffer="WindowsServer"; ImageSku="2022-datacenter-g2" },
-    [pscustomobject]@{ VmResourceName="vm-eus2-SAZE-PENLAB-C11"; ComputerName = "SAZE-PENLAB-C11"; Os="Windows"; Size="Standard_D2s_v5";   ImagePublisher="MicrosoftWindowsDesktop"; ImageOffer="windows-11"; ImageSku="win11-23h2-pro" }
-)
-
-# Admin credentials (Windows) - will prompt if creating Windows VMs
-$adminUser = "locala"
-
-#endregion
-
-#region Helper: accept marketplace terms if required
-function Ensure-MarketplaceTermsAccepted {
-    param($publisher, $offer, $sku, $location)
-    # show & accept terms (if required) using az cli via PowerShell if available
-    try {
-        # Use Az module to query image plan if available via Get-AzVMImage, otherwise rely on az cli.
-        $urn = "$publisher:$offer:$sku:latest"
-        Write-Host "Checking marketplace terms for $urn"
-        # Use az if present
-        if (Get-Command az -ErrorAction SilentlyContinue) {
-            $show = az vm image show --urn $urn --location $location | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($show -and $show.plan) {
-                $planPublisher = $show.plan.publisher
-                $planName = $show.plan.name
-                $planProduct = $show.plan.product
-                Write-Host "Image has plan info (publisher:$planPublisher product:$planProduct name:$planName) - ensuring terms accepted..."
-                az vm image terms accept --urn $urn | Out-Null
-                Write-Host "Marketplace terms accepted for $urn"
-            }
-            else {
-                Write-Host "No marketplace plan info (or not required) for $urn"
-            }
-        }
-        else {
-            Write-Host "az CLI not found; cannot auto-accept marketplace terms. You may need to accept via portal or az vm image terms accept before deploying images with plans."
-        }
-    } catch {
-        Write-Warning "Unable to auto-accept marketplace terms for $publisher:$offer:$sku: $_"
-    }
-}
-#endregion
-
-#region Resource Group
-Write-Host "Creating resource group $rgName in $locName..."
-New-AzResourceGroup -Name $rgName -Location $locName -Force | Out-Null
-#endregion
-
-#region Route Table + Routes
-Write-Host "Creating route table $rtName and routes..."
-$rt = New-AzRouteTable -Name $rtName -ResourceGroupName $rgName -Location $locName -Force
-
-# default 0.0.0.0/0 -> VirtualAppliance (10.199.64.60)
-$existing = $rt.Routes | Where-Object { $_.Name -eq "default" }
-if (-not $existing) {
-    Add-AzRouteConfig -Name "default" -AddressPrefix "0.0.0.0/0" -NextHopType $defaultNextHopType -NextHopIpAddress $defaultNextHopIp -RouteTable $rt | Out-Null
-}
-
-# route for vnet local range -> VirtualNetwork (keeps local)
-$existing = $rt.Routes | Where-Object { $_.Name -eq "vnet" }
-if (-not $existing) {
-    Add-AzRouteConfig -Name "vnet" -AddressPrefix $vnetPrefix -NextHopType "VirtualNetwork" -RouteTable $rt | Out-Null
-}
-
-$rt = Set-AzRouteTable -RouteTable $rt
-#endregion
-
-#region NSG & NSG rules (recreate rules based on screenshot)
-Write-Host "Creating NSG $nsgName and rules..."
-$nsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location $locName -Force
-
-# Inbound rules (based on screenshot)
-# Priority numbers chosen to match screenshot-like list
-# Allow MPS in (example SSH & RDP ports) - adjust if your exact ports differ
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "Allow-MPS-In" -Description "Allow management ports" -Access Allow -Protocol Tcp -Direction Inbound -Priority 300 -SourceAddressPrefix "10.199.64.228" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "22,3389" | Out-Null
-
-# Allow Bastion RDP in (port 3389) from peering hub range 10.199.64.64/26 per your note
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "Allow-BastionRDP-In" -Description "Allow Bastion RDP from hub" -Access Allow -Protocol Tcp -Direction Inbound -Priority 310 -SourceAddressPrefix "10.199.64.64/26" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "3389" | Out-Null
-
-# Allow VNet in
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "AllowVnetInBound" -Description "Allow VNet" -Access Allow -Protocol '*' -Direction Inbound -Priority 65000 -SourceAddressPrefix "VirtualNetwork" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "*" | Out-Null
-
-# Allow AzureLoadBalancer
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "AllowAzureLoadBalancerInBound" -Description "AzureLoadBalancer" -Access Allow -Protocol '*' -Direction Inbound -Priority 65001 -SourceAddressPrefix "AzureLoadBalancer" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "*" | Out-Null
-
-# Deny all inbound (last)
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "DenyAllInbound" -Description "Deny all inbound" -Access Deny -Protocol '*' -Direction Inbound -Priority 65500 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "*" | Out-Null
-
-# Outbound rules (allow VNet & Internet then deny all)
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "AllowVnetOutBound" -Description "Allow VNet Outbound" -Access Allow -Protocol '*' -Direction Outbound -Priority 65000 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "VirtualNetwork" -DestinationPortRange "*" | Out-Null
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "AllowInternetOutBound" -Description "Allow Internet Outbound" -Access Allow -Protocol '*' -Direction Outbound -Priority 65001 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "Internet" -DestinationPortRange "*" | Out-Null
-Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg -Name "DenyAllOutBound" -Description "Deny all outbound" -Access Deny -Protocol '*' -Direction Outbound -Priority 65500 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "*" -DestinationPortRange "*" | Out-Null
-
-$nsg = Set-AzNetworkSecurityGroup -NetworkSecurityGroup $nsg
-#endregion
-
-#region VNet + Subnet (create and associate NSG + RouteTable)
-Write-Host "Creating VNet $vnetName and subnet $snName..."
-$vnet = New-AzVirtualNetwork -Name $vnetName -ResourceGroupName $rgName -Location $locName -AddressPrefix $vnetPrefix -Force
-
-# Add subnet with NSG + RouteTable
-Add-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $snName -AddressPrefix $subnetPrefix -NetworkSecurityGroup $nsg -RouteTable $rt | Out-Null
-$vnet = Set-AzVirtualNetwork -VirtualNetwork $vnet
-$subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $snName
-#endregion
-
-#region VNet Peering (cross-subscription)
-Write-Host "Creating VNet peering $peeringName to remote VNet $peerRemoteVNetName in subscription $peerRemoteSubscription..."
-# Get remote vnet by switching context to remote subscription (the script assumes same tenant)
-$currentContext = Get-AzContext
-try {
-    Set-AzContext -Subscription $peerRemoteSubscription -ErrorAction Stop
-    $remoteVnet = Get-AzVirtualNetwork -Name $peerRemoteVNetName -ResourceGroupName $peerRemoteVNetRG -ErrorAction Stop
-    # Back to penlab subscription
-    Set-AzContext -Subscription $currentContext.Subscription.Id
-} catch {
-    # If remote VNet cannot be found, warn and continue; user may provide RG/subscription differently.
-    Write-Warning "Unable to find remote VNet $peerRemoteVNetName in subscription $peerRemoteSubscription / RG $peerRemoteVNetRG. Please ensure these values are correct and that your account has read/write in that subscription. Error: $_"
-    # attempt to restore context anyway
-    Set-AzContext -Subscription $currentContext.Subscription.Id -ErrorAction SilentlyContinue
-    $remoteVnet = $null
-}
-
-if ($remoteVnet) {
-    $vnet = Get-AzVirtualNetwork -Name $vnetName -ResourceGroupName $rgName
-    $existingPeer = $vnet.VirtualNetworkPeerings | Where-Object { $_.Name -eq $peeringName }
-    if (-not $existingPeer) {
-        Add-AzVirtualNetworkPeering -Name $peeringName -VirtualNetwork $vnet -RemoteVirtualNetworkId $remoteVnet.Id -AllowVirtualNetworkAccess $true -AllowForwardedTraffic $false -AllowGatewayTransit $false -UseRemoteGateways $false | Out-Null
-        # Ensure reverse peering exists on remote vnet (requires permissions in remote subscription)
-        try {
-            Set-AzContext -Subscription $peerRemoteSubscription
-            $reverseName = "peer_${vnetName}_to_${peerRemoteVNetName}"
-            $remoteHas = $remoteVnet.VirtualNetworkPeerings | Where-Object { $_.RemoteVirtualNetwork.Id -eq $vnet.Id }
-            if (-not $remoteHas) {
-                Add-AzVirtualNetworkPeering -Name $reverseName -VirtualNetwork $remoteVnet -RemoteVirtualNetworkId $vnet.Id -AllowVirtualNetworkAccess $true -AllowForwardedTraffic $false -AllowGatewayTransit $false -UseRemoteGateways $false | Out-Null
-            }
-        } catch {
-            Write-Warning "Unable to create reverse peering in remote subscription. Ensure permissions and run reverse peering creation in the hub subscription if required."
-        } finally {
-            Set-AzContext -Subscription $currentContext.Subscription.Id
-        }
-        Write-Host "Created vnet peering between $vnetName and $peerRemoteVNetName" -ForegroundColor Green
-    }
-    else {
-        Write-Host "Peering $peeringName already present. Skipping." -ForegroundColor Green
-    }
-}
-#endregion
-
-#region Storage accounts + Private Endpoint (blob only) + Private DNS Zone
-Write-Host "Creating storage accounts: $saPrimary and $saDiag..."
-# Primary (with private endpoint) - create if missing
-$saPrimaryObj = Get-AzStorageAccount -ResourceGroupName $rgName -Name $saPrimary -ErrorAction SilentlyContinue
-if (-not $saPrimaryObj) {
-    $saPrimaryObj = New-AzStorageAccount -Name $saPrimary -ResourceGroupName $rgName -Location $locName -SkuName "Standard_ZRS" -Kind "StorageV2"
-}
-
-$saDiagObj = Get-AzStorageAccount -ResourceGroupName $rgName -Name $saDiag -ErrorAction SilentlyContinue
-if (-not $saDiagObj) {
-    $saDiagObj = New-AzStorageAccount -Name $saDiag -ResourceGroupName $rgName -Location $locName -SkuName "Standard_ZRS" -Kind "StorageV2"
-}
-
-# Private DNS zone creation (for blob) and virtual network link
-$pdz = Get-AzPrivateDnsZone -Name $pePrivateDnsZone -ErrorAction SilentlyContinue
-if (-not $pdz) {
-    Write-Host "Creating Private DNS zone $pePrivateDnsZone"
-    $pdz = New-AzPrivateDnsZone -Name $pePrivateDnsZone -ResourceGroupName $rgName -Location $locName
-}
-
-# Link PDZ to VNet
-$linkName = "${vnetName}-link"
-$existingLink = Get-AzPrivateDnsVirtualNetworkLink -ZoneName $pdz.Name -Name $linkName -ErrorAction SilentlyContinue
-if (-not $existingLink) {
-    New-AzPrivateDnsVirtualNetworkLink -ZoneName $pdz.Name -Name $linkName -ResourceGroupName $rgName -VirtualNetworkId $vnet.Id -EnableRegistration $false | Out-Null
-    Write-Host "Linked private DNS zone $($pdz.Name) to VNet $vnetName"
-}
-
-# Create Private Endpoint for storage account (blob only)
-$pe = Get-AzPrivateEndpoint -Name $peName -ResourceGroupName $rgName -ErrorAction SilentlyContinue
-if (-not $pe) {
-    Write-Host "Creating Private Endpoint $peName for $saPrimary (blob) with IP $pePrivateIp..."
-    $sa = Get-AzStorageAccount -ResourceGroupName $rgName -Name $saPrimary
-    $subnetId = $subnet.Id
-
-    $pe = New-AzPrivateEndpoint -Name $peName -ResourceGroupName $rgName -Location $locName -SubnetId $subnetId -PrivateLinkServiceConnection @(
-        @{ Name = "$saPrimary-blob-connection"; 
-           PrivateLinkServiceId = $sa.Id; 
-           GroupIds = @("blob"); 
-           RequestMessage = "PenLab DR private endpoint creation" }
-    ) -ManualRequest $false
-    # Set fixed IP on NIC (if required) - NIC name usually created automatically by private endpoint
-    Start-Sleep -Seconds 5
-    $nics = Get-AzNetworkInterface -ResourceGroupName $rgName | Where-Object { $_.Name -like "$peName*" }
-    if ($nics) {
-        $nic = $nics[0]
-        # try to set static ip config
-        $ipconfig = $nic.IpConfigurations[0]
-        $ipconfig.PrivateIpAllocationMethod = "Static"
-        $ipconfig.PrivateIpAddress = $pePrivateIp
-        $nic | Set-AzNetworkInterface | Out-Null
-        Write-Host "Set private endpoint NIC $($nic.Name) IP to $pePrivateIp"
-    }
-    # Add dns record in PDZ (automatic if Private Endpoint created & link exists). If not, create A record
-    # The exact record name is like <storageaccount>.blob.core.windows.net. Azure will handle it when private endpoint is created.
-} else {
-    Write-Host "Private endpoint $peName already exists. Skipping."
-}
-#endregion
-
-#region Automation Account, Runbook import (use exact runbook code you provided) and schedules
-Write-Host "Creating Automation account $aaName..."
-$aa = Get-AzAutomationAccount -ResourceGroupName $rgName -Name $aaName -ErrorAction SilentlyContinue
-if (-not $aa) {
-    $aa = New-AzAutomationAccount -Name $aaName -ResourceGroupName $rgName -Location $locName -Plan "Basic" -AssignSystemIdentity
-} else {
-    Write-Host "Automation account exists. Skipping creation."
-}
-
-# Ensure Contributor role assignment for AA identity at RG scope
-if ($aa.Identity -and $aa.Identity.PrincipalId) {
-    $aaId = $aa.Identity.PrincipalId
-    $existing = Get-AzRoleAssignment -Scope (Get-AzResourceGroup -Name $rgName).ResourceId -ObjectId $aaId -ErrorAction SilentlyContinue
-    if (-not $existing) {
-        New-AzRoleAssignment -ObjectId $aaId -RoleDefinitionName "Contributor" -Scope (Get-AzResourceGroup -Name $rgName).ResourceId | Out-Null
-        Write-Host "Assigned Contributor role to Automation identity at RG scope."
-    } else {
-        Write-Host "Automation identity already has role assignment."
-    }
-}
-
-# Import the runbook EXACTLY as provided (script body pasted)
-$rb = Get-AzAutomationRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $runbookName -ErrorAction SilentlyContinue
-if (-not $rb) {
-    $runbookPath = "$env:TEMP\$runbookName.ps1"
-    @"
-param(
-    [string]`$ResourceGroupName,
-    [string]`$VMNames,      # accept string input from portal/test pane
-    [string]`$Action
-)
-
-`$ErrorActionPreference = "Stop"
-
-Write-Output "=== RAW PARAM DROP ==="
-Write-Output "VMNames RAW: [`$VMNames]"
-Write-Output "VMNames TYPE: `$(`$VMNames.GetType().FullName)"
-Write-Output "======================="
-
-# Normalize parameters
-`$ResourceGroupName = `$ResourceGroupName.Trim()
-`$Action = `$Action.Trim().ToLower()
-
-# Clean and split VMNames robustly (accept comma, pipe, semicolon, newlines, or bracketed JSON-like)
-`$clean = `$VMNames -replace '^\s*$begin:math:display$\|$end:math:display$\s*$',''     # strip surrounding brackets if present
-`$clean = `$clean -replace "`r","" -replace "`n","" # remove newlines
-# If the string includes quoted names like "vm1","vm2", remove extraneous quotes before splitting
-`$clean = `$clean -replace '"',''
-# Split on comma, pipe or semicolon, trim each, remove empties
-`$VMNamesArray = (`$clean -split '[,|;]') | ForEach-Object { `$_.Trim() } | Where-Object { `$_. -ne '' }
-
-Write-Output "Starting runbook..."
-Write-Output "Resource Group: `$ResourceGroupName"
-Write-Output "VMs: `$(`$VMNamesArray -join ', ')"
-Write-Output "Action: `$Action"
-
-# Login using managed identity (Automation hybrid worker would use -Identity)
-Connect-AzAccount -Identity
-
-foreach (`$vmName in `$VMNamesArray) {
-    Write-Output "`nProcessing VM: `$vmName"
-
-    try {
-        # Validate VM exists
-        `$vm = Get-AzVM -Name `$vmName -ResourceGroupName `$ResourceGroupName -ErrorAction Stop
-
-        switch (`$Action) {
-            "start" {
-                Write-Output "Starting `$vmName..."
-                Start-AzVM -Name `$vmName -ResourceGroupName `$ResourceGroupName -ErrorAction Stop
-            }
-            "stop" {
-                Write-Output "Stopping `$vmName..."
-                Stop-AzVM -Name `$vmName -ResourceGroupName `$ResourceGroupName -Force -ErrorAction Stop
-            }
-            default {
-                throw "Invalid action '`$Action'. Use Start or Stop."
-            }
-        }
-
-        Write-Output ("{0}: Completed action {1}" -f `$vmName, `$Action)
-    }
-    catch {
-        # Log error but continue with next VM
-        Write-Output ("ERROR processing VM '{0}': {1}" -f `$vmName, `$_.Exception.Message)
-        # Optionally: write the full error
-        Write-Output (`$_. | Out-String)
-        continue
-    }
-}
-
-Write-Output "`nRunbook completed successfully."
-"@ | Out-File -FilePath $runbookPath -Encoding UTF8
-
-    Import-AzAutomationRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $runbookName -Path $runbookPath -Type PowerShell | Out-Null
-    Publish-AzAutomationRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $runbookName | Out-Null
-    Write-Host "Imported and published Runbook $runbookName"
-} else {
-    Write-Host "Runbook $runbookName exists. Skipping import."
-}
-
-# Create schedules: DC @ 07:00, Others @ 07:05, Stop-All @ 19:00 — Central Time
-function New-PenLabSchedule {
-    param($name,$time,$action,$vms)
-    $s = Get-AzAutomationSchedule -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $name -ErrorAction SilentlyContinue
-    if ($s) { Write-Host "Schedule $name exists. Skipping." ; return }
-    $start = (Get-Date "$time").AddDays(1)
-    $s = New-AzAutomationSchedule -AutomationAccountName $aaName -ResourceGroupName $rgName -Name $name -StartTime $start -WeekInterval 1 -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -TimeZone $scheduleTimeZone
-    Register-AzAutomationScheduledRunbook -AutomationAccountName $aaName -ResourceGroupName $rgName -RunbookName $runbookName -ScheduleName $s.Name -Parameters @{ Action=$action; VMList=$vms; RG=$rgName } | Out-Null
-    Write-Host "Created schedule $name"
-}
-
-$dc = "vm-eus2-SAZE-PENLAB-DC01"
-$all = $vmDefs | ForEach-Object { $_.VmResourceName }
-$others = $all | Where-Object { $_ -ne $dc }
-
-New-PenLabSchedule -name "PenLabStart-DC01"   -time "07:00" -action "Start" -vms @($dc)
-New-PenLabSchedule -name "PenLabStart-Others" -time "07:05" -action "Start" -vms $others
-New-PenLabSchedule -name "PenLabStop-All"     -time "19:00" -action "Stop"  -vms $all
-#endregion
-
-#region VM creation (images, NICs, tags). This is the full creation path.
-# Prompt for Windows admin credential (will be used to create Windows VMs)
-$needAdminCred = $false
-foreach ($v in $vmDefs) { if ($v.Os -eq "Windows") { $needAdminCred = $true } }
-if ($needAdminCred) {
-    Write-Host "Enter admin credentials for Windows VMs (only used to create new Windows VMs):"
-    $adminCred = Get-Credential -UserName $adminUser
-}
-
-# SSH key for Linux (Kali). Use existing key if present; otherwise create a new key pair
-$sshPublicKeyPath = "$env:USERPROFILE\.ssh\id_rsa.pub"
-if (-not (Test-Path $sshPublicKeyPath)) {
-    Write-Host "SSH public key not found at $sshPublicKeyPath. Generating new keypair (no passphrase)."
-    ssh-keygen -t rsa -b 4096 -f "$env:USERPROFILE\.ssh\id_rsa" -N "" | Out-Null
-}
-$sshPublicKey = Get-Content $sshPublicKeyPath -Raw
-
-foreach ($v in $vmDefs) {
-    $vmName = $v.VmResourceName
-    $compName = $v.ComputerName
-    Write-Host "Creating VM resource $vmName (ComputerName: $compName, OS: $($v.Os))..."
-
-    # NIC
-    $nicName = "$vmName-eth0"
-    $nic = Get-AzNetworkInterface -Name $nicName -ResourceGroupName $rgName -ErrorAction SilentlyContinue
-    if (-not $nic) {
-        $nic = New-AzNetworkInterface -Name $nicName -ResourceGroupName $rgName -Location $locName -SubnetId $subnet.Id
-    }
-
-    # Ensure marketplace terms accepted if marketplace image
-    Ensure-MarketplaceTermsAccepted -publisher $v.ImagePublisher -offer $v.ImageOffer -sku $v.ImageSku -location $locName
-
-    if ($v.Os -eq "Linux") {
-        # Kali Linux using marketplace image parameters provided earlier
-        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $v.Size |
-            Set-AzVMOperatingSystem -Linux -ComputerName $compName -Credential (New-Object System.Management.Automation.PSCredential("azureuser",(ConvertTo-SecureString -String "PlaceholderPassword!1" -AsPlainText -Force))) -DisablePasswordAuthentication |
-            Add-AzVMNetworkInterface -Id $nic.Id
-
-        $vmConfig = Add-AzVMSshPublicKey -VM $vmConfig -KeyData $sshPublicKey -Path "/home/azureuser/.ssh/authorized_keys"
-
-        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $v.ImagePublisher -Offer $v.ImageOffer -Skus $v.ImageSku -Version "latest"
-    }
-    else {
-        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $v.Size |
-            Set-AzVMOperatingSystem -Windows -ComputerName $compName -Credential $adminCred -ProvisionVMAgent -EnableAutoUpdate |
-            Add-AzVMNetworkInterface -Id $nic.Id
-
-        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $v.ImagePublisher -Offer $v.ImageOffer -Skus $v.ImageSku -Version "latest"
-    }
-
-    # Create VM
-    try {
-        New-AzVM -ResourceGroupName $rgName -Location $locName -VM $vmConfig | Out-Null
-        Write-Host "Created VM $vmName"
-    } catch {
-        Write-Error "Failed to create VM $vmName: $($_.Exception.Message)"
-    }
-
-    # Tag with schedule info to match portal (DC @07:00, others @07:05)
-    $autoStart = if ($vmName -eq $dc) { "07:00" } else { "07:05" }
-    $autoStop  = "19:00"
-    $tags = @{ AutoStart = $autoStart; AutoStop = $autoStop; Weekdays = "True" }
-    Update-AzTag -ResourceId (Get-AzVM -Name $vmName -ResourceGroupName $rgName).Id -Tag $tags -Operation Merge | Out-Null
-}
-#endregion
-
-Write-Host "PenLab DR deployment completed. Review Azure portal to confirm resources and runbook schedules." -ForegroundColor Green
+Title
+
+Decommission and Delete Unused Linux Server and Associated Azure Resources
+
+⸻
+
+Description
+
+This change involves permanently decommissioning a Linux virtual machine and its associated Azure resources. The server is no longer required for business operations, is not joined to Active Directory, and has no current application dependencies. The VM is currently included in Cohesity backups. The change will remove the server, its disks, NICs, public/private IPs (if any), and backup entries from the portal to reduce unnecessary cloud spend and improve environment hygiene.
+
+⸻
+
+📌 Change Form Fields
+
+Justification
+
+The Linux server is no longer required for any business, operational, or application function. It is consuming Azure compute, storage, and backup capacity, resulting in unnecessary cost. Decommissioning the server will remove unused infrastructure, ensure an accurate inventory of active systems, and improve overall environment management.
+There are no dependencies tied to this VM, and it is not joined to Active Directory. The responsible team has confirmed that all data or configurations on the server are no longer needed.
+
+⸻
+
+Implementation Plan
+	1.	Notify stakeholders and confirm downtime window, even though the server is not in use.
+	2.	Verify there are no active workloads, services, or processes running on the server.
+	3.	Disable Cohesity backup job for the VM and mark the backup object for removal per backup retention policy.
+	4.	Gracefully shut down the Linux VM from the Azure portal.
+	5.	Delete the VM from the Azure subscription.
+	6.	Delete associated resources, including:
+	•	OS Disk
+	•	Data disks (if any)
+	•	Network Interface Card
+	•	Public IP / Private IP (if assigned)
+	•	Network Security Group (if dedicated)
+	7.	Validate that no orphaned resources remain in the Resource Group.
+	8.	Update CMDB/asset records to reflect decommissioned status.
+	9.	Communicate completion to stakeholders.
+
+⸻
+
+Risk and Impact Analysis
+	•	People affected: None. No users, groups, or business units rely on this server.
+	•	Systems affected: Only the targeted Linux VM and its associated infrastructure.
+	•	User impact: None. No applications, workflows, or integrations depend on this server.
+	•	Downtime: No downtime impact, as the server is unused.
+	•	Risk of unsuccessful change:
+	•	Minimal. If the server were deleted in error, recovery would depend on Cohesity backups.
+	•	Residual risks:
+	•	Once deleted, the VM cannot be recovered outside available backup retention.
+
+Overall risk level: Low
+
+⸻
+
+Backout Plan
+
+If the change is unsuccessful or the deletion was performed prematurely:
+	1.	Restore the VM from Cohesity backup (full VM restore).
+	2.	Recreate the server with prior configuration settings.
+	3.	Reattach disks and network components as needed.
+	4.	Validate server access and function.
+
+Estimated rollback time: 1–2 hours, depending on backup restore speed.
+
+⸻
+
+Test Plan
+	•	Confirm that the server has no active dependencies prior to deletion.
+	•	Confirm that Cohesity backup history is available for potential rollback.
+	•	After deletion, validate:
+	•	The VM no longer appears in Azure portal
+	•	Associated disks, NICs, and IPs are removed
+	•	Backup job is disabled
+	•	No orphaned resources remain
+	•	Update CMDB/asset management records.
+
+Testing is complete and comparable to production, as verification is performed directly in the live Azure environment.

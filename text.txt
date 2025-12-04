@@ -1,76 +1,95 @@
-Title
+Change Title
 
-Decommission and Delete Unused Linux Server and Associated Azure Resources
+Run Microsoft Zero Trust Assessment on Azure / Microsoft 365 Tenant
 
 ⸻
 
 Description
 
-This change involves permanently decommissioning a Linux virtual machine and its associated Azure resources. The server is no longer required for business operations, is not joined to Active Directory, and has no current application dependencies. The VM is currently included in Cohesity backups. The change will remove the server, its disks, NICs, public/private IPs (if any), and backup entries from the portal to reduce unnecessary cloud spend and improve environment hygiene.
+Execute the Microsoft Zero Trust Assessment tool to perform a comprehensive, read-only evaluation of our Azure / Microsoft 365 tenant. The assessment uses Microsoft’s official module to analyze identity, device, and foundational security configurations against Zero Trust best practices. No changes will be made to production resources. The output will be a detailed posture report highlighting gaps, risks, and recommended remediation steps.
 
 ⸻
 
-📌 Change Form Fields
-
-Justification
-
-The Linux server is no longer required for any business, operational, or application function. It is consuming Azure compute, storage, and backup capacity, resulting in unnecessary cost. Decommissioning the server will remove unused infrastructure, ensure an accurate inventory of active systems, and improve overall environment management.
-There are no dependencies tied to this VM, and it is not joined to Active Directory. The responsible team has confirmed that all data or configurations on the server are no longer needed.
+PLANNING TAB
 
 ⸻
 
-Implementation Plan
-	1.	Notify stakeholders and confirm downtime window, even though the server is not in use.
-	2.	Verify there are no active workloads, services, or processes running on the server.
-	3.	Disable Cohesity backup job for the VM and mark the backup object for removal per backup retention policy.
-	4.	Gracefully shut down the Linux VM from the Azure portal.
-	5.	Delete the VM from the Azure subscription.
-	6.	Delete associated resources, including:
-	•	OS Disk
-	•	Data disks (if any)
-	•	Network Interface Card
-	•	Public IP / Private IP (if assigned)
-	•	Network Security Group (if dedicated)
-	7.	Validate that no orphaned resources remain in the Resource Group.
-	8.	Update CMDB/asset records to reflect decommissioned status.
-	9.	Communicate completion to stakeholders.
+Justification — Why is the change needed? Explain in detail.
+
+This change is required to assess the organization’s current cloud security posture using Microsoft’s official Zero Trust Assessment tool. The assessment aligns our environment with Zero Trust principles and Microsoft Secure Future Initiative guidance. It performs an automated review of identity protection, device compliance, authentication posture, privileged access, conditional access, and logging configurations.
+
+The assessment identifies misconfigurations, security gaps, and improvement opportunities that cannot be easily detected manually. As cyber threats increasingly target cloud identity systems, performing this assessment is essential to ensure the environment is resilient, compliant, and aligned with best practices. The resulting report will provide actionable recommendations for strengthening tenant security.
 
 ⸻
 
-Risk and Impact Analysis
-	•	People affected: None. No users, groups, or business units rely on this server.
-	•	Systems affected: Only the targeted Linux VM and its associated infrastructure.
-	•	User impact: None. No applications, workflows, or integrations depend on this server.
-	•	Downtime: No downtime impact, as the server is unused.
-	•	Risk of unsuccessful change:
-	•	Minimal. If the server were deleted in error, recovery would depend on Cohesity backups.
-	•	Residual risks:
-	•	Once deleted, the VM cannot be recovered outside available backup retention.
+Implementation Plan — What are the steps needed for the change to be completed?
+	1.	Prepare Environment
+	•	Confirm access to a workstation with PowerShell 7+.
+	•	Validate that the operator has the required Azure AD permissions (initial run requires Global Admin consent; subsequent runs may use Global Reader).
+	2.	Install Assessment Module
+	•	Run: Install-Module ZeroTrustAssessment -Scope CurrentUser
+	3.	Authenticate to Azure AD / Microsoft Graph
+	•	Execute: Connect-ZtAssessment
+	•	Approve required Graph permissions.
+	4.	Run the Microsoft Zero Trust Assessment
+	•	Execute: Invoke-ZtAssessment -Path <designated output folder>
+	•	Allow the tool to complete processing (may take several hours depending on tenant size).
+	5.	Collect and Review the Report
+	•	Retrieve the generated HTML report.
+	•	Store the report securely due to sensitive content.
+	•	Review findings with Cloud Security, IAM, and Governance teams.
+	6.	Close Out Activity
+	•	Delete local export folder after secure storage.
+	•	Plan follow-up remediation CRs as needed.
 
-Overall risk level: Low
-
-⸻
-
-Backout Plan
-
-If the change is unsuccessful or the deletion was performed prematurely:
-	1.	Restore the VM from Cohesity backup (full VM restore).
-	2.	Recreate the server with prior configuration settings.
-	3.	Reattach disks and network components as needed.
-	4.	Validate server access and function.
-
-Estimated rollback time: 1–2 hours, depending on backup restore speed.
+No production configuration changes will be made during any step.
 
 ⸻
 
-Test Plan
-	•	Confirm that the server has no active dependencies prior to deletion.
-	•	Confirm that Cohesity backup history is available for potential rollback.
-	•	After deletion, validate:
-	•	The VM no longer appears in Azure portal
-	•	Associated disks, NICs, and IPs are removed
-	•	Backup job is disabled
-	•	No orphaned resources remain
-	•	Update CMDB/asset management records.
+Risk and Impact Analysis — How many people are affected? What groups? What is the impact?
 
-Testing is complete and comparable to production, as verification is performed directly in the live Azure environment.
+Impact: None — this is a strictly read-only assessment.
+Affected Users: No end users impacted; only Cloud Security / IAM / Azure Administrators will be involved.
+Business/System Impact:
+	•	No downtime or service interruption expected.
+	•	No configuration changes occur.
+	•	Minimal operational risk; the assessment only queries data.
+
+Risks:
+	•	Assessment report contains sensitive tenant information and must be stored securely.
+	•	Discovery of critical gaps may lead to future remediation work.
+
+Mitigation:
+	•	Use least-privilege account where possible.
+	•	Securely store and limit access to the report.
+	•	Close monitoring during assessment execution.
+
+⸻
+
+Backout Plan — If the change is not successful, what is the backup plan?
+
+No backout plan is required because the activity is fully read-only.
+If issues arise:
+	•	Stop the script or close the session.
+	•	No changes are applied to the tenant, so no rollback is needed.
+	•	Delete any locally exported sensitive files if the process is halted.
+
+⸻
+
+Test Plan — How has this been tested and validated?
+
+Since this is a read-only assessment, functional testing consists of:
+	•	Verifying successful installation of the module.
+	•	Confirming that authentication to the tenant works with appropriate permissions.
+	•	Ensuring the assessment command (Invoke-ZtAssessment) completes successfully.
+	•	Validating that the HTML report is generated, readable, and includes:
+	•	Identity posture
+	•	Device compliance posture
+	•	Risk levels
+	•	Pass/Fail test results
+	•	Remediation recommendations
+
+Success criteria:
+	•	Assessment completes without errors.
+	•	Full report is generated and stored securely.
+	•	Findings are reviewed by the Security team.

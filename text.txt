@@ -1,7 +1,3 @@
-Executed Disaster Recovery (DR) Bubble Testing
+Implemented Azure Policies for Key Vault Soft Delete and Purge Protection
 
-Supported multiple disaster recovery (DR) testing exercises by provisioning required resources within the DR test bubble, enabling application teams to perform validation testing, and decommissioning resources after completion. Successfully executed DR testing across three separate windows, ensuring readiness while minimizing cost and resource sprawl.
-
-Migrated LIMS Virtual Machines from AWS to Azure
-
-Supported the migration of eight LIMS virtual machines (six production and two test) from AWS to Azure by collaborating with cross-functional teams. Worked with Commvault stakeholders to restore backed-up VMs into Azure and performed on-box configuration to ensure systems were properly configured and operational post-migration, contributing to a successful platform transition for the LIMS project.
+Designed and applied Azure Policies to enforce the use of soft delete and purge protection on newly created Azure Key Vaults. As part of this effort, remediated existing Key Vaults by enabling both controls to ensure alignment with security best practices. Communicated policy changes to stakeholders prior to enforcement and implemented deny policies to prevent the creation of non-compliant Key Vaults, strengthening data protection and governance across the environment.

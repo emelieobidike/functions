@@ -1,3 +1,5 @@
-Implemented Azure Policies for Key Vault Soft Delete and Purge Protection
+Led Azure Key Vault Secret Lifecycle Management Initiative
 
-Designed and applied Azure Policies to enforce the use of soft delete and purge protection on newly created Azure Key Vaults. As part of this effort, remediated existing Key Vaults by enabling both controls to ensure alignment with security best practices. Communicated policy changes to stakeholders prior to enforcement and implemented deny policies to prevent the creation of non-compliant Key Vaults, strengthening data protection and governance across the environment.
+Led a cross-functional effort to improve Azure Key Vault security posture by reviewing existing Key Vaults with application teams to identify secrets without expiration dates. Coordinated working sessions with stakeholders to understand application dependencies, validate active versus unused secrets, and apply appropriate expiration policies without disrupting production workloads.
+
+As part of this initiative, identified unused or minimally utilized Key Vaults during the review process, confirmed decommissioning eligibility with application owners, and safely removed these resources—reducing security risk and preventing unnecessary cloud costs. This effort required ongoing stakeholder engagement, careful change coordination, and continues into the next year as part of a broader governance and security improvement program.

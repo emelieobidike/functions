@@ -1,95 +1,79 @@
-Change Title
+Driving Consistency with Azure Tag Governance
 
-Run Microsoft Zero Trust Assessment on Azure / Microsoft 365 Tenant
+Why Tagging Matters
 
-⸻
+As our Azure footprint continues to grow, consistent resource tagging becomes critical for:
+	•	Cost allocation and chargeback
+	•	Security and compliance reporting
+	•	Operational visibility
+	•	Automation and governance at scale
 
-Description
-
-Execute the Microsoft Zero Trust Assessment tool to perform a comprehensive, read-only evaluation of our Azure / Microsoft 365 tenant. The assessment uses Microsoft’s official module to analyze identity, device, and foundational security configurations against Zero Trust best practices. No changes will be made to production resources. The output will be a detailed posture report highlighting gaps, risks, and recommended remediation steps.
-
-⸻
-
-PLANNING TAB
+During Q3, the Cloud Engineering team took a major step toward strengthening our Azure governance posture by standardizing tagging across legacy Azure subscriptions.
 
 ⸻
 
-Justification — Why is the change needed? Explain in detail.
+The Challenge
 
-This change is required to assess the organization’s current cloud security posture using Microsoft’s official Zero Trust Assessment tool. The assessment aligns our environment with Zero Trust principles and Microsoft Secure Future Initiative guidance. It performs an automated review of identity protection, device compliance, authentication posture, privileged access, conditional access, and logging configurations.
+Many of our older Azure subscriptions had:
+	•	Resource groups with incomplete or inconsistent tags
+	•	Individual resources missing tags entirely
+	•	No automated enforcement to maintain tagging consistency over time
 
-The assessment identifies misconfigurations, security gaps, and improvement opportunities that cannot be easily detected manually. As cyber threats increasingly target cloud identity systems, performing this assessment is essential to ensure the environment is resilient, compliant, and aligned with best practices. The resulting report will provide actionable recommendations for strengthening tenant security.
-
-⸻
-
-Implementation Plan — What are the steps needed for the change to be completed?
-	1.	Prepare Environment
-	•	Confirm access to a workstation with PowerShell 7+.
-	•	Validate that the operator has the required Azure AD permissions (initial run requires Global Admin consent; subsequent runs may use Global Reader).
-	2.	Install Assessment Module
-	•	Run: Install-Module ZeroTrustAssessment -Scope CurrentUser
-	3.	Authenticate to Azure AD / Microsoft Graph
-	•	Execute: Connect-ZtAssessment
-	•	Approve required Graph permissions.
-	4.	Run the Microsoft Zero Trust Assessment
-	•	Execute: Invoke-ZtAssessment -Path <designated output folder>
-	•	Allow the tool to complete processing (may take several hours depending on tenant size).
-	5.	Collect and Review the Report
-	•	Retrieve the generated HTML report.
-	•	Store the report securely due to sensitive content.
-	•	Review findings with Cloud Security, IAM, and Governance teams.
-	6.	Close Out Activity
-	•	Delete local export folder after secure storage.
-	•	Plan follow-up remediation CRs as needed.
-
-No production configuration changes will be made during any step.
+This made cost tracking, ownership identification, and reporting more difficult than necessary.
 
 ⸻
 
-Risk and Impact Analysis — How many people are affected? What groups? What is the impact?
+The Solution: A Two-Part Tagging Initiative
 
-Impact: None — this is a strictly read-only assessment.
-Affected Users: No end users impacted; only Cloud Security / IAM / Azure Administrators will be involved.
-Business/System Impact:
-	•	No downtime or service interruption expected.
-	•	No configuration changes occur.
-	•	Minimal operational risk; the assessment only queries data.
+This initiative was delivered through a collaborative effort between team members, addressing both tag completeness and long-term enforcement.
 
-Risks:
-	•	Assessment report contains sensitive tenant information and must be stored securely.
-	•	Discovery of critical gaps may lead to future remediation work.
+1. Resource Group Tag Standardization
+Stephen King led the effort to:
+	•	Review all legacy Azure subscriptions
+	•	Ensure required tags were present and accurate on every resource group
+	•	Establish resource groups as the single source of truth for tagging
 
-Mitigation:
-	•	Use least-privilege account where possible.
-	•	Securely store and limit access to the report.
-	•	Close monitoring during assessment execution.
+This laid the foundation for consistent governance across all Azure resources.
 
-⸻
+2. Automated Tag Inheritance via Azure Policy
+Building on that foundation, an Azure Policy was designed and implemented to:
+	•	Automatically inherit tags from the resource group
+	•	Apply those tags to all resources within the group
+	•	Ensure that any resource missing tags is brought into compliance
 
-Backout Plan — If the change is not successful, what is the backup plan?
-
-No backout plan is required because the activity is fully read-only.
-If issues arise:
-	•	Stop the script or close the session.
-	•	No changes are applied to the tenant, so no rollback is needed.
-	•	Delete any locally exported sensitive files if the process is halted.
+To complete the loop, a remediation policy was also deployed, retroactively applying the correct tags to existing non-compliant resources across the affected subscriptions.
 
 ⸻
 
-Test Plan — How has this been tested and validated?
+How It Works (At a Glance)
+	1.	Required tags are defined and enforced at the resource group level
+	2.	Azure Policy evaluates resources within each group
+	3.	Missing tags are automatically inherited from the resource group
+	4.	Remediation tasks update existing resources without manual intervention
 
-Since this is a read-only assessment, functional testing consists of:
-	•	Verifying successful installation of the module.
-	•	Confirming that authentication to the tenant works with appropriate permissions.
-	•	Ensuring the assessment command (Invoke-ZtAssessment) completes successfully.
-	•	Validating that the HTML report is generated, readable, and includes:
-	•	Identity posture
-	•	Device compliance posture
-	•	Risk levels
-	•	Pass/Fail test results
-	•	Remediation recommendations
+This ensures ongoing compliance, even as new resources are created.
 
-Success criteria:
-	•	Assessment completes without errors.
-	•	Full report is generated and stored securely.
-	•	Findings are reviewed by the Security team.
+⸻
+
+The Impact
+
+✔ Improved tagging consistency across legacy subscriptions
+✔ Reduced manual effort for tag maintenance
+✔ Better cost visibility and reporting accuracy
+✔ Stronger governance and compliance posture
+✔ A scalable framework for future Azure growth
+
+⸻
+
+Looking Ahead
+
+This tagging framework now serves as a baseline standard for Azure governance and can be extended further to support:
+	•	Cost optimization initiatives
+	•	Security and compliance automation
+	•	Policy-driven resource management
+
+A great example of how collaboration and automation can simplify complex cloud challenges.
+
+⸻
+
+Kudos to the team for delivering a solution that balances governance, scalability, and operational efficiency. 

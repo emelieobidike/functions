@@ -1,79 +1,47 @@
-Driving Consistency with Azure Tag Governance
-
-Why Tagging Matters
-
-As our Azure footprint continues to grow, consistent resource tagging becomes critical for:
-	•	Cost allocation and chargeback
-	•	Security and compliance reporting
-	•	Operational visibility
-	•	Automation and governance at scale
-
-During Q3, the Cloud Engineering team took a major step toward strengthening our Azure governance posture by standardizing tagging across legacy Azure subscriptions.
+Safety
+	•	Supported secure and reliable cloud operations by ensuring all infrastructure changes—including server builds, decommissioning, network security updates, and access provisioning—followed established change management and infrastructure-as-code practices.
+	•	Minimized operational and security risk by enforcing least-privilege access through role-based access control (RBAC) and by coordinating changes within approved maintenance windows.
+	•	Reduced the likelihood of service disruption by collaborating closely with application teams to align security and operational changes with business-critical workloads.
 
 ⸻
 
-The Challenge
+Operational Excellence
 
-Many of our older Azure subscriptions had:
-	•	Resource groups with incomplete or inconsistent tags
-	•	Individual resources missing tags entirely
-	•	No automated enforcement to maintain tagging consistency over time
-
-This made cost tracking, ownership identification, and reporting more difficult than necessary.
-
-⸻
-
-The Solution: A Two-Part Tagging Initiative
-
-This initiative was delivered through a collaborative effort between team members, addressing both tag completeness and long-term enforcement.
-
-1. Resource Group Tag Standardization
-Stephen King led the effort to:
-	•	Review all legacy Azure subscriptions
-	•	Ensure required tags were present and accurate on every resource group
-	•	Establish resource groups as the single source of truth for tagging
-
-This laid the foundation for consistent governance across all Azure resources.
-
-2. Automated Tag Inheritance via Azure Policy
-Building on that foundation, an Azure Policy was designed and implemented to:
-	•	Automatically inherit tags from the resource group
-	•	Apply those tags to all resources within the group
-	•	Ensure that any resource missing tags is brought into compliance
-
-To complete the loop, a remediation policy was also deployed, retroactively applying the correct tags to existing non-compliant resources across the affected subscriptions.
+Drive Shareholder Value & Operational Excellence
+	•	Provided day-to-day operational support to internal clients and application teams by building and decommissioning Azure and AWS servers, ensuring infrastructure remained aligned with current business needs while avoiding unnecessary cloud spend.
+	•	Implemented Network Security Group (NSG) changes to support application requirements (e.g., opening or modifying ports) using infrastructure-as-code via Git repositories, VS Code, and Azure Pipelines—improving consistency, traceability, and deployment reliability.
+	•	Performed role-based access control (RBAC) assignments to grant application teams appropriate access (e.g., VM Contributor, Reader roles) to their resources, enabling effective resource management while maintaining security best practices.
+	•	Maintained and enhanced internal tooling by updating a custom DocFX Azure Pipeline task to address Node.js runtime changes, ensuring continued stability and reliability of documentation and wiki deployments.
+	•	Identified unused or minimally utilized Azure Key Vaults during security remediation activities, confirmed findings with application teams, and safely decommissioned these resources—resulting in direct cost savings and preventing the accumulation of unnecessary cloud expenses.
 
 ⸻
 
-How It Works (At a Glance)
-	1.	Required tags are defined and enforced at the resource group level
-	2.	Azure Policy evaluates resources within each group
-	3.	Missing tags are automatically inherited from the resource group
-	4.	Remediation tasks update existing resources without manual intervention
-
-This ensures ongoing compliance, even as new resources are created.
+Cybersecurity
+	•	Led the effort to upgrade Azure Function Apps and Web Apps to TLS 1.3, coordinating directly with application owners to schedule upgrades that minimized operational impact.
+	•	Acted as both technical lead and hands-on executor by performing upgrades on behalf of teams that required additional support or were not comfortable implementing the changes themselves.
+	•	Balanced security objectives with operational constraints, achieving approximately 50% completion of the initiative while accounting for business-critical workloads and varied maintenance windows.
 
 ⸻
 
-The Impact
-
-✔ Improved tagging consistency across legacy subscriptions
-✔ Reduced manual effort for tag maintenance
-✔ Better cost visibility and reporting accuracy
-✔ Stronger governance and compliance posture
-✔ A scalable framework for future Azure growth
-
-⸻
-
-Looking Ahead
-
-This tagging framework now serves as a baseline standard for Azure governance and can be extended further to support:
-	•	Cost optimization initiatives
-	•	Security and compliance automation
-	•	Policy-driven resource management
-
-A great example of how collaboration and automation can simplify complex cloud challenges.
+Governance, Risk, and Compliance
+	•	Partnered with IT Security and application teams to improve Azure Key Vault hygiene by reviewing existing secrets and enforcing the use of expiration dates, reducing long-term security risk.
+	•	Conducted direct reviews with application owners to identify non-expiring secrets and applied appropriate expiration policies in line with security best practices.
+	•	Designed and implemented an Azure Policy to automatically inherit resource group tags at the resource level, ensuring consistent tagging across subscriptions.
+	•	Created and executed remediation tasks to retrospectively apply required tags to existing resources, significantly improving cost allocation, governance, and compliance reporting across legacy environments.
+	•	Led and supported the organization’s transition from CIS Microsoft Azure Benchmark v1.4 to v2.0, a major upgrade to the cloud security and compliance framework.
+	•	Performed a detailed comparison between CIS 1.4 and CIS 2.0 to:
+	•	Identify newly introduced controls
+	•	Identify controls retired or removed
+	•	Assess the impact of these differences on compliance posture and reporting percentages.
+	•	Applied existing CIS 1.4 exemptions to CIS 2.0 to maintain reporting consistency and enable meaningful comparisons between both benchmarks.
+	•	Worked closely with IT Security to review new CIS 2.0 controls and determine which required remediation versus those eligible for suppression or exemption due to non-applicability, resource constraints, or limited security benefit.
+	•	Supported enhanced compliance visibility through collaboration on reporting improvements, including a new dashboard view that provides a side-by-side comparison of CIS 1.4 and CIS 2.0 compliance levels.
+	•	Enabled centralized compliance reporting by ensuring CIS 2.0 policies were applied across all subscriptions and integrated into Splunk dashboards.
+	•	Positioned the organization to begin formal CIS 2.0 reporting by year-end, ensuring a smooth transition with minimal disruption to existing compliance processes.
 
 ⸻
 
-Kudos to the team for delivering a solution that balances governance, scalability, and operational efficiency. 
+People Development
+	•	Reviewed and updated my Individual Development Plan (IDP) in collaboration with my manager to align personal development goals with organizational priorities.
+	•	Invested in continuous learning by attending Copilot training, Terraform training, and additional professional development sessions to strengthen cloud automation, infrastructure-as-code, and productivity capabilities.
+	•	Applied newly acquired skills directly to operational work, including policy development, pipeline maintenance, and infrastructure automation.

@@ -1,47 +1,71 @@
 Safety
-	•	Supported secure and reliable cloud operations by ensuring all infrastructure changes—including server builds, decommissioning, network security updates, and access provisioning—followed established change management and infrastructure-as-code practices.
-	•	Minimized operational and security risk by enforcing least-privilege access through role-based access control (RBAC) and by coordinating changes within approved maintenance windows.
-	•	Reduced the likelihood of service disruption by collaborating closely with application teams to align security and operational changes with business-critical workloads.
+
+Completed Comprehensive Safety Training
+
+Fulfilled all mandatory safety training requirements, demonstrating a strong commitment to compliance, risk awareness, and maintaining a safe and secure working environment.
 
 ⸻
 
 Operational Excellence
 
-Drive Shareholder Value & Operational Excellence
-	•	Provided day-to-day operational support to internal clients and application teams by building and decommissioning Azure and AWS servers, ensuring infrastructure remained aligned with current business needs while avoiding unnecessary cloud spend.
-	•	Implemented Network Security Group (NSG) changes to support application requirements (e.g., opening or modifying ports) using infrastructure-as-code via Git repositories, VS Code, and Azure Pipelines—improving consistency, traceability, and deployment reliability.
-	•	Performed role-based access control (RBAC) assignments to grant application teams appropriate access (e.g., VM Contributor, Reader roles) to their resources, enabling effective resource management while maintaining security best practices.
-	•	Maintained and enhanced internal tooling by updating a custom DocFX Azure Pipeline task to address Node.js runtime changes, ensuring continued stability and reliability of documentation and wiki deployments.
-	•	Identified unused or minimally utilized Azure Key Vaults during security remediation activities, confirmed findings with application teams, and safely decommissioned these resources—resulting in direct cost savings and preventing the accumulation of unnecessary cloud expenses.
+1. Drive Shareholder Value & Operational Excellence
+
+Handled Azure and AWS Server Builds for Clients
+
+Delivered end-to-end server build solutions across Azure and AWS for internal clients and application teams, adhering to cloud best practices while ensuring timely delivery and high standards of service.
+
+Handled Azure and AWS Server Decommissioning
+
+Successfully managed the decommissioning of cloud servers across Azure and AWS, ensuring proper resource cleanup, cost optimization, and adherence to security and operational best practices.
+
+Assisted Application Teams with Network Security Group (NSG) Changes
+
+Provided support to application teams by implementing required NSG changes, including port updates and network configuration adjustments, using infrastructure-as-code via Git repositories and Azure Pipelines to ensure compliance and consistency.
+
+Maintained and Enhanced Internal CI/CD Tooling
+
+Updated and enhanced a custom DocFX Azure Pipeline task to address Node.js runtime changes, ensuring continued stability and reliability of documentation and wiki deployments.
+
+Optimized Cloud Costs Through Resource Decommissioning
+
+Identified unused or minimally utilized Azure Key Vaults during security reviews, validated findings with application teams, and decommissioned confirmed unused resources—preventing unnecessary cloud spend and improving cost efficiency.
 
 ⸻
 
-Cybersecurity
-	•	Led the effort to upgrade Azure Function Apps and Web Apps to TLS 1.3, coordinating directly with application owners to schedule upgrades that minimized operational impact.
-	•	Acted as both technical lead and hands-on executor by performing upgrades on behalf of teams that required additional support or were not comfortable implementing the changes themselves.
-	•	Balanced security objectives with operational constraints, achieving approximately 50% completion of the initiative while accounting for business-critical workloads and varied maintenance windows.
+2. Cybersecurity
+
+Led TLS 1.3 Upgrade Initiative for Web and Function Apps
+
+Led efforts to upgrade Azure Web Apps and Function Apps to TLS 1.3 by coordinating with application owners to schedule appropriate maintenance windows and, where required, directly executing the upgrades to strengthen the organization’s security posture.
 
 ⸻
 
-Governance, Risk, and Compliance
-	•	Partnered with IT Security and application teams to improve Azure Key Vault hygiene by reviewing existing secrets and enforcing the use of expiration dates, reducing long-term security risk.
-	•	Conducted direct reviews with application owners to identify non-expiring secrets and applied appropriate expiration policies in line with security best practices.
-	•	Designed and implemented an Azure Policy to automatically inherit resource group tags at the resource level, ensuring consistent tagging across subscriptions.
-	•	Created and executed remediation tasks to retrospectively apply required tags to existing resources, significantly improving cost allocation, governance, and compliance reporting across legacy environments.
-	•	Led and supported the organization’s transition from CIS Microsoft Azure Benchmark v1.4 to v2.0, a major upgrade to the cloud security and compliance framework.
-	•	Performed a detailed comparison between CIS 1.4 and CIS 2.0 to:
-	•	Identify newly introduced controls
-	•	Identify controls retired or removed
-	•	Assess the impact of these differences on compliance posture and reporting percentages.
-	•	Applied existing CIS 1.4 exemptions to CIS 2.0 to maintain reporting consistency and enable meaningful comparisons between both benchmarks.
-	•	Worked closely with IT Security to review new CIS 2.0 controls and determine which required remediation versus those eligible for suppression or exemption due to non-applicability, resource constraints, or limited security benefit.
-	•	Supported enhanced compliance visibility through collaboration on reporting improvements, including a new dashboard view that provides a side-by-side comparison of CIS 1.4 and CIS 2.0 compliance levels.
-	•	Enabled centralized compliance reporting by ensuring CIS 2.0 policies were applied across all subscriptions and integrated into Splunk dashboards.
-	•	Positioned the organization to begin formal CIS 2.0 reporting by year-end, ensuring a smooth transition with minimal disruption to existing compliance processes.
+3. Governance, Risk & Compliance
+
+Assisted Application Teams with Azure Role-Based Access Control (RBAC)
+
+Supported application teams by adding and removing Azure role assignments to ensure appropriate access to resources, enabling teams to perform their work effectively while maintaining compliance with RBAC policies.
+
+Improved Azure Key Vault Secret Management
+
+Collaborated with IT Security and application teams to review Azure Key Vaults and enforce expiration dates on secrets, reducing long-term security risks and improving credential hygiene.
+
+Implemented Tag Governance via Azure Policy and Remediation
+
+Designed and implemented an Azure Policy to ensure resources inherit required tags from their resource groups, along with remediation tasks to retrospectively apply tags to existing resources, improving governance, cost tracking, and reporting accuracy.
+
+Led CIS Microsoft Azure Benchmark Migration (v1.4 to v2.0)
+
+Played a key role in transitioning compliance reporting from CIS Azure Benchmark v1.4 to v2.0 by analyzing control differences, identifying new and retired controls, and assessing their impact on compliance posture.
+
+Applied Exemptions, Suppressions, and Reporting Enhancements for CIS 2.0
+
+Worked with IT Security to apply existing exemptions to CIS 2.0, review new controls for remediation versus suppression, and support enhanced compliance reporting, including side-by-side CIS 1.4 and 2.0 visibility via dashboards and Splunk integration, positioning the organization to formally report on CIS 2.0 by year-end.
 
 ⸻
 
 People Development
-	•	Reviewed and updated my Individual Development Plan (IDP) in collaboration with my manager to align personal development goals with organizational priorities.
-	•	Invested in continuous learning by attending Copilot training, Terraform training, and additional professional development sessions to strengthen cloud automation, infrastructure-as-code, and productivity capabilities.
-	•	Applied newly acquired skills directly to operational work, including policy development, pipeline maintenance, and infrastructure automation.
+
+Focused on Individual Career and Skills Development
+
+Actively managed my professional development by reviewing and updating my Individual Development Plan (IDP) following discussions with my manager, and by attending training sessions including Microsoft Copilot training, Terraform training, and other professional development opportunities to enhance my technical and productivity skills.

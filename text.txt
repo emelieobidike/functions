@@ -1,5 +1,78 @@
-Led Azure Key Vault Secret Lifecycle Management Initiative
+Change Title
 
-Led a cross-functional effort to improve Azure Key Vault security posture by reviewing existing Key Vaults with application teams to identify secrets without expiration dates. Coordinated working sessions with stakeholders to understand application dependencies, validate active versus unused secrets, and apply appropriate expiration policies without disrupting production workloads.
+Implement Azure AD SAML Single Sign-On for Wellworks Application
 
-As part of this initiative, identified unused or minimally utilized Key Vaults during the review process, confirmed decommissioning eligibility with application owners, and safely removed these resources—reducing security risk and preventing unnecessary cloud costs. This effort required ongoing stakeholder engagement, careful change coordination, and continues into the next year as part of a broader governance and security improvement program.
+⸻
+
+Change Description
+
+This change implements Single Sign-On (SSO) for the Wellworks application by integrating the existing on-premises Active Directory with Azure Active Directory (Azure AD) and configuring SAML-based authentication.
+
+The implementation includes deploying Azure AD Connect to synchronize identities, registering Wellworks as an enterprise application in Azure AD, configuring SAML settings (Identifier and Reply URL), assigning authorized users/groups, and providing metadata to the vendor for final configuration. This will allow users to authenticate securely using their corporate credentials when accessing the Wellworks application.
+
+⸻
+
+Justification – Why is the change needed?
+
+This change is required to improve security, user experience, and identity management by centralizing authentication through Azure Active Directory. Enabling SAML SSO eliminates the need for separate application credentials, reduces password-related risks, and aligns the Wellworks application with the organization’s identity and access management standards.
+
+Additionally, this integration supports compliance requirements by enabling better access control, auditing, and lifecycle management of user access.
+
+⸻
+
+Implementation Plan
+	1.	Verify Azure AD Premium P1 licensing is enabled and assign licenses to applicable users/groups.
+	2.	Install and configure Azure AD Connect on an approved on-premises server to synchronize Active Directory users to Azure AD.
+	3.	Register Wellworks as a non-gallery Enterprise Application in Azure AD.
+	4.	Configure SAML-based Single Sign-On for the application:
+	•	Set Identifier and Reply URL (ACS) for Beta and Production environments.
+	5.	Assign authorized users and/or security groups to the application.
+	6.	Download SAML metadata XML from Azure AD and securely share it with Wellworks for configuration on their side.
+	7.	Validate authentication flow in the Beta environment.
+	8.	Confirm successful SSO login and finalize configuration.
+
+Implementation Owner: IT Identity / Cloud Engineering Team (SSP)
+Vendor Involvement: Wellworks (metadata configuration on their platform)
+User Communication: IT Communications will notify impacted users once SSO is enabled and tested.
+
+⸻
+
+Risk and Impact Analysis
+
+Users Affected:
+Users who access the Wellworks application (limited to assigned users/groups).
+
+Impact:
+Minimal. Users will authenticate using corporate credentials instead of separate application credentials.
+
+Risks if Unsuccessful:
+	•	Users may be unable to log in to Wellworks if SAML configuration fails.
+	•	Temporary authentication issues during testing.
+
+Mitigation:
+	•	Testing will be completed in a Beta environment prior to production.
+	•	Local (non-SSO) access can remain available until successful validation.
+
+Downtime Expected:
+No planned downtime.
+
+⸻
+
+Backout Plan
+
+If the change is unsuccessful:
+	1.	Disable SAML Single Sign-On for the Wellworks application in Azure AD.
+	2.	Revert users to the existing authentication method.
+	3.	Remove or disable the Enterprise Application configuration if required.
+
+Rollback can be completed within 15–30 minutes with no impact to other systems.
+
+⸻
+
+Test Plan
+	•	Validate Azure AD user synchronization via Azure AD Connect.
+	•	Test SAML authentication using assigned test users in the Beta environment.
+	•	Confirm successful login, correct user identity mapping, and application access.
+	•	Verify fallback authentication remains available during testing.
+
+Testing results and screenshots/logs will be attached to the change record as evidence.

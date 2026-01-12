@@ -1,78 +1,170 @@
-Change Title
-
-Implement Azure AD SAML Single Sign-On for Wellworks Application
+Anthony, this is a very strong dataset for a leadership-level conversation. I’ll give you exact speaker notes you can use verbatim while you walk them through the dashboard, plus answers to the tough questions they will ask.
 
 ⸻
 
-Change Description
+1. Opening – Set the context
 
-This change implements Single Sign-On (SSO) for the Wellworks application by integrating the existing on-premises Active Directory with Azure Active Directory (Azure AD) and configuring SAML-based authentication.
+“This Zero Trust Assessment is Microsoft’s automated evaluation of how closely our tenant aligns with Zero Trust principles — verify explicitly, use least privilege, and assume breach.
+It analyses identity, authentication strength, device compliance and conditional access coverage.”
 
-The implementation includes deploying Azure AD Connect to synchronize identities, registering Wellworks as an enterprise application in Azure AD, configuring SAML settings (Identifier and Reply URL), assigning authorized users/groups, and providing metadata to the vendor for final configuration. This will allow users to authenticate securely using their corporate credentials when accessing the Wellworks application.
-
-⸻
-
-Justification – Why is the change needed?
-
-This change is required to improve security, user experience, and identity management by centralizing authentication through Azure Active Directory. Enabling SAML SSO eliminates the need for separate application credentials, reduces password-related risks, and aligns the Wellworks application with the organization’s identity and access management standards.
-
-Additionally, this integration supports compliance requirements by enabling better access control, auditing, and lifecycle management of user access.
+“The goal isn’t perfection today — it’s to clearly see where our biggest exposure is and what actions will most reduce risk.”
 
 ⸻
 
-Implementation Plan
-	1.	Verify Azure AD Premium P1 licensing is enabled and assign licenses to applicable users/groups.
-	2.	Install and configure Azure AD Connect on an approved on-premises server to synchronize Active Directory users to Azure AD.
-	3.	Register Wellworks as a non-gallery Enterprise Application in Azure AD.
-	4.	Configure SAML-based Single Sign-On for the application:
-	•	Set Identifier and Reply URL (ACS) for Beta and Production environments.
-	5.	Assign authorized users and/or security groups to the application.
-	6.	Download SAML metadata XML from Azure AD and securely share it with Wellworks for configuration on their side.
-	7.	Validate authentication flow in the Beta environment.
-	8.	Confirm successful SSO login and finalize configuration.
+2. Tenant overview – scale & risk surface
 
-Implementation Owner: IT Identity / Cloud Engineering Team (SSP)
-Vendor Involvement: Wellworks (metadata configuration on their platform)
-User Communication: IT Communications will notify impacted users once SSO is enabled and tested.
+Point to the first dashboard.
+
+Speaker notes:
+
+“We currently have over 9,100 users, 17,400 devices, and 348 enterprise apps integrated into Entra ID.”
+“Only about 3,700 devices are managed, meaning the majority of sign-ins are coming from devices we don’t fully control.”
+
+“On the Zero Trust test coverage, we’ve passed 34 out of 97 Identity checks and 9 out of 36 Device checks.
+That tells us clearly: we are still early in our Zero Trust maturity.”
 
 ⸻
 
-Risk and Impact Analysis
+3. Authentication & Conditional Access gap
 
-Users Affected:
-Users who access the Wellworks application (limited to assigned users/groups).
+Point to User authentication / Device sign-ins Sankey diagram.
 
-Impact:
-Minimal. Users will authenticate using corporate credentials instead of separate application credentials.
+Speaker notes:
 
-Risks if Unsuccessful:
-	•	Users may be unable to log in to Wellworks if SAML configuration fails.
-	•	Temporary authentication issues during testing.
+“This is the most critical finding.
+Over the last 5 hours, only 68% of sign-ins were protected by Conditional Access with MFA.”
 
-Mitigation:
-	•	Testing will be completed in a Beta environment prior to production.
-	•	Local (non-SSO) access can remain available until successful validation.
+“Even more concerning: only 4.7% of sign-ins came from compliant devices.”
 
-Downtime Expected:
-No planned downtime.
+“That means today, most users can successfully authenticate from unmanaged or non-compliant devices with minimal enforcement.”
 
 ⸻
 
-Backout Plan
+4. Privileged users – elevated blast radius
 
-If the change is unsuccessful:
-	1.	Disable SAML Single Sign-On for the Wellworks application in Azure AD.
-	2.	Revert users to the existing authentication method.
-	3.	Remove or disable the Enterprise Application configuration if required.
+Point to Privileged users auth methods.
 
-Rollback can be completed within 15–30 minutes with no impact to other systems.
+Speaker notes:
+
+“This shows the strongest authentication methods used by privileged accounts.
+We still see reliance on phishable methods like password and basic phone factors.”
+
+“This is extremely high risk — if one admin credential is phished, the attacker effectively owns the tenant.”
 
 ⸻
 
-Test Plan
-	•	Validate Azure AD user synchronization via Azure AD Connect.
-	•	Test SAML authentication using assigned test users in the Beta environment.
-	•	Confirm successful login, correct user identity mapping, and application access.
-	•	Verify fallback authentication remains available during testing.
+5. Device compliance & ownership
 
-Testing results and screenshots/logs will be attached to the change record as evidence.
+Point to Device compliance / ownership pie charts.
+
+Speaker notes:
+
+“On paper, device compliance looks decent — 93% compliant — but context matters.”
+“Only 15% of devices are corporate-owned.
+So compliance is largely coming from personal devices with lighter controls.”
+
+“Zero Trust expects that sensitive access should come from managed, corporate-owned devices wherever possible.”
+
+⸻
+
+6. Desktop posture – hybrid technical debt
+
+Point to Desktop devices view.
+
+Speaker notes:
+
+“97% of our desktops are Entra Hybrid Joined — meaning they’re still heavily dependent on legacy on-prem AD.”
+“0% are Entra-native joined.”
+
+“This makes it harder to enforce modern controls like conditional access, device health attestation, and seamless passwordless authentication.”
+
+⸻
+
+7. Mobile risk
+
+Point to Mobile devices view.
+
+Speaker notes:
+
+“We have almost 5,000 mobile devices.
+Only 55% of Android and 68% of iOS devices are compliant.”
+
+“This is one of our biggest real-world exposure points — mobile devices are used everywhere and are the hardest to secure after laptops.”
+
+⸻
+
+8. Executive Summary – plain English
+
+“In simple terms:
+We’ve built a modern identity platform, but we’re still trusting users far too easily.”
+
+“Most access today does not require strong authentication from secure, managed devices — and that’s exactly how ransomware and identity-based breaches start.”
+
+⸻
+
+9. What this means for the business
+
+“Our current posture significantly increases the risk of:
+
+	•	Account takeover
+	•	Privilege escalation
+	•	Data exfiltration
+	•	Regulatory and audit findings”
+
+⸻
+
+10. The roadmap – what we fix first
+
+Phase 1 – Immediate (30–60 days)
+
+Enforce MFA for all users without exception.
+Block legacy authentication protocols.
+Require phishing-resistant MFA for privileged accounts.
+
+Phase 2 – 90 days
+
+Conditional Access: only allow access to sensitive apps from compliant devices.
+Begin migrating desktops to Entra-native join.
+
+Phase 3 – 6 months
+
+Passwordless strategy — FIDO2 / Windows Hello for Business.
+Corporate ownership program for mobile devices.
+
+⸻
+
+Questions leadership WILL ask — and your answers
+
+❓ Are we exposed right now?
+
+Yes — identity is our largest attack surface today. A single compromised user or admin account could lead to a full tenant breach.
+
+⸻
+
+❓ Why is only 4.7% of sign-ins compliant?
+
+Because we currently allow access from unmanaged and personal devices with little enforcement. Compliance is not yet a gate — it’s only being monitored.
+
+⸻
+
+❓ What’s the cost to fix this?
+
+Mostly licensing we already own — the bigger investment is operational change and communication, not new spend.
+
+⸻
+
+❓ What’s the risk if we delay?
+
+Identity-based attacks are now the #1 entry point for breaches globally. The longer we stay here, the higher the likelihood of a serious incident.
+
+⸻
+
+❓ What does success look like in 6 months?
+
+95%+ of sign-ins protected by Conditional Access and MFA.
+Admins fully passwordless.
+Sensitive apps accessible only from managed, compliant devices.
+
+⸻
+
+If you follow these notes, you will sound measured, confident, and strategic — not alarmist, but clearly in control.

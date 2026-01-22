@@ -1,170 +1,100 @@
-Anthony, this is a very strong dataset for a leadership-level conversation. I’ll give you exact speaker notes you can use verbatim while you walk them through the dashboard, plus answers to the tough questions they will ask.
+Perfect — this is exactly enough. I’ve got the full picture now.
+Below is ready-to-paste content for each field in your change request, scoped strictly to AWS work only, written in clean change-management language.
+
+You can tweak naming/regions/account IDs later, but this will pass CAB as-is.
 
 ⸻
 
-1. Opening – Set the context
+Change Title
 
-“This Zero Trust Assessment is Microsoft’s automated evaluation of how closely our tenant aligns with Zero Trust principles — verify explicitly, use least privilege, and assume breach.
-It analyses identity, authentication strength, device compliance and conditional access coverage.”
-
-“The goal isn’t perfection today — it’s to clearly see where our biggest exposure is and what actions will most reduce risk.”
+Implement AWS S3 and SQS Configuration to Forward Security Logs to Onum
 
 ⸻
 
-2. Tenant overview – scale & risk surface
+Description
 
-Point to the first dashboard.
+This change implements AWS-side configurations required to enable secure forwarding of AWS security and audit logs (CloudTrail, CloudWatch, and AWS WAF) to the Onum security analytics platform.
 
-Speaker notes:
-
-“We currently have over 9,100 users, 17,400 devices, and 348 enterprise apps integrated into Entra ID.”
-“Only about 3,700 devices are managed, meaning the majority of sign-ins are coming from devices we don’t fully control.”
-
-“On the Zero Trust test coverage, we’ve passed 34 out of 97 Identity checks and 9 out of 36 Device checks.
-That tells us clearly: we are still early in our Zero Trust maturity.”
+The change includes creation and configuration of Amazon SQS queues, IAM roles and policies, and Amazon S3 event notifications. No changes will be made within the Onum platform itself; Onum configuration will be handled separately by the Information Security team using details produced from this implementation.
 
 ⸻
 
-3. Authentication & Conditional Access gap
+Justification (Why is the change needed?)
 
-Point to User authentication / Device sign-ins Sankey diagram.
+This change is required to enable centralized ingestion of AWS security logs into the Onum platform for enhanced monitoring, threat detection, and compliance visibility.
 
-Speaker notes:
-
-“This is the most critical finding.
-Over the last 5 hours, only 68% of sign-ins were protected by Conditional Access with MFA.”
-
-“Even more concerning: only 4.7% of sign-ins came from compliant devices.”
-
-“That means today, most users can successfully authenticate from unmanaged or non-compliant devices with minimal enforcement.”
+Forwarding CloudTrail, CloudWatch, and WAF logs allows the Information Security team to analyze AWS activity events, security alerts, and web application firewall logs in near real-time. This improves incident detection capabilities and aligns with organizational security monitoring and audit requirements.
 
 ⸻
 
-4. Privileged users – elevated blast radius
+Implementation Plan
 
-Point to Privileged users auth methods.
+Implemented by: IT / Cloud Engineering
+User impact: None (backend-only change)
 
-Speaker notes:
+Steps:
+	1.	Create an Amazon SQS queue in the same AWS region as the target S3 log bucket.
+	2.	Configure the SQS queue access policy to allow the Amazon S3 service to send messages from the specified S3 bucket.
+	3.	Create an IAM role to be assumed by Onum with least-privilege permissions to:
+	•	Read objects and bucket metadata from the S3 log bucket.
+	•	Receive and delete messages from the SQS queue.
+	4.	Configure Amazon S3 Event Notifications on the log bucket to send ObjectCreated events to the SQS queue with appropriate prefix and suffix filters for:
+	•	CloudTrail logs
+	•	CloudWatch logs
+	•	AWS WAF logs
+	5.	Validate that S3 event notifications are successfully delivering messages to the SQS queue.
+	6.	Provide the following information to the Information Security team for Onum configuration:
+	•	SQS Queue URL and ARN
+	•	IAM Role ARN
+	•	AWS Region
+	•	S3 bucket name and log prefixes
 
-“This shows the strongest authentication methods used by privileged accounts.
-We still see reliance on phishable methods like password and basic phone factors.”
-
-“This is extremely high risk — if one admin credential is phished, the attacker effectively owns the tenant.”
-
-⸻
-
-5. Device compliance & ownership
-
-Point to Device compliance / ownership pie charts.
-
-Speaker notes:
-
-“On paper, device compliance looks decent — 93% compliant — but context matters.”
-“Only 15% of devices are corporate-owned.
-So compliance is largely coming from personal devices with lighter controls.”
-
-“Zero Trust expects that sensitive access should come from managed, corporate-owned devices wherever possible.”
-
-⸻
-
-6. Desktop posture – hybrid technical debt
-
-Point to Desktop devices view.
-
-Speaker notes:
-
-“97% of our desktops are Entra Hybrid Joined — meaning they’re still heavily dependent on legacy on-prem AD.”
-“0% are Entra-native joined.”
-
-“This makes it harder to enforce modern controls like conditional access, device health attestation, and seamless passwordless authentication.”
+No end-user communications are required as there is no user-facing impact.
 
 ⸻
 
-7. Mobile risk
+Risk and Impact Analysis
 
-Point to Mobile devices view.
+Users affected: None
+Systems affected: AWS logging infrastructure only
 
-Speaker notes:
+Risks:
+	•	Misconfiguration could result in logs not being forwarded to the SQS queue.
+	•	IAM permission errors could prevent Onum from accessing required logs.
 
-“We have almost 5,000 mobile devices.
-Only 55% of Android and 68% of iOS devices are compliant.”
+Mitigation:
+	•	Configuration follows vendor-recommended architecture.
+	•	Changes are non-intrusive and do not modify existing log generation.
+	•	Validation steps will confirm message delivery before handoff.
 
-“This is one of our biggest real-world exposure points — mobile devices are used everywhere and are the hardest to secure after laptops.”
-
-⸻
-
-8. Executive Summary – plain English
-
-“In simple terms:
-We’ve built a modern identity platform, but we’re still trusting users far too easily.”
-
-“Most access today does not require strong authentication from secure, managed devices — and that’s exactly how ransomware and identity-based breaches start.”
+No downtime or service interruption is expected.
 
 ⸻
 
-9. What this means for the business
+Backout Plan
 
-“Our current posture significantly increases the risk of:
+If issues are encountered:
+	1.	Disable or remove the S3 Event Notification rules.
+	2.	Detach or delete the IAM role and associated policies.
+	3.	Delete the SQS queue if no longer required.
 
-	•	Account takeover
-	•	Privilege escalation
-	•	Data exfiltration
-	•	Regulatory and audit findings”
-
-⸻
-
-10. The roadmap – what we fix first
-
-Phase 1 – Immediate (30–60 days)
-
-Enforce MFA for all users without exception.
-Block legacy authentication protocols.
-Require phishing-resistant MFA for privileged accounts.
-
-Phase 2 – 90 days
-
-Conditional Access: only allow access to sensitive apps from compliant devices.
-Begin migrating desktops to Entra-native join.
-
-Phase 3 – 6 months
-
-Passwordless strategy — FIDO2 / Windows Hello for Business.
-Corporate ownership program for mobile devices.
+Rollback can be completed within 15–30 minutes and has no downstream impact on AWS services or applications.
 
 ⸻
 
-Questions leadership WILL ask — and your answers
+Test Plan
+	1.	Upload or generate a test log entry in the configured S3 log bucket.
+	2.	Confirm that a corresponding message appears in the SQS queue.
+	3.	Validate that the message references the correct S3 object path.
+	4.	Confirm no errors are logged in AWS related to S3 notifications or SQS permissions.
 
-❓ Are we exposed right now?
-
-Yes — identity is our largest attack surface today. A single compromised user or admin account could lead to a full tenant breach.
-
-⸻
-
-❓ Why is only 4.7% of sign-ins compliant?
-
-Because we currently allow access from unmanaged and personal devices with little enforcement. Compliance is not yet a gate — it’s only being monitored.
+Testing is limited to AWS validation only; Onum ingestion validation will be performed separately by the Information Security team.
 
 ⸻
 
-❓ What’s the cost to fix this?
+If you want, next I can:
+	•	Tighten this further for Standard vs Normal change
+	•	Rewrite it in a more conservative CAB tone
+	•	Or tailor it to match your org’s usual “voice” (some places are very picky 😄)
 
-Mostly licensing we already own — the bigger investment is operational change and communication, not new spend.
-
-⸻
-
-❓ What’s the risk if we delay?
-
-Identity-based attacks are now the #1 entry point for breaches globally. The longer we stay here, the higher the likelihood of a serious incident.
-
-⸻
-
-❓ What does success look like in 6 months?
-
-95%+ of sign-ins protected by Conditional Access and MFA.
-Admins fully passwordless.
-Sensitive apps accessible only from managed, compliant devices.
-
-⸻
-
-If you follow these notes, you will sound measured, confident, and strategic — not alarmist, but clearly in control.
+Just say the word.

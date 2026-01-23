@@ -1,16 +1,26 @@
 Good afternoon Dallas,
 
-Thank you — that makes sense, and I agree we should align with existing standards and how the business team operates today.
+Yes, that aligns well with my understanding.
 
-Based on Trey’s recommendation, the next step would be to understand how Sandy and Tracy’s team currently handles access and roles within AIO. That will help determine whether Azure (Entra ID) should remain authentication-only or whether there’s a real need to pass role information during SSO.
+Based on Trey’s recommendation, the key input we need from Sandy and Tracy is how their team currently manages access and roles within AIO. That will determine whether Azure (Entra ID) should be used strictly for authentication or if there’s value in passing role information as part of SSO.
 
 At a high level, the two options are:
-	•	Azure auth-only: Azure is used strictly for sign-in, and Sandy/Tracy’s team manages user access and roles directly within AIO (simpler and most common).
-	•	Azure roles/groups: Roles or groups are managed centrally in Entra ID and passed to AIO during login (more complex, but useful if centralized RBAC is desired).
 
-To help guide the decision, it would be helpful to confirm with Sandy and Tracy:
-	•	Are there different user roles in AIO today?
-	•	How is access granted or changed for their team?
-	•	Is access management something they prefer to own within AIO, or would they want it centralized via Azure?
+Option 1: Azure used for authentication only (most common / simplest)
+- Azure authenticates users via OpenID Connect and sends standard identity claims (UPN/email, name, object ID).
+- Sandy and Tracy’s team manages user access and roles directly within AIO.
+- Pros: Simpler implementation, fewer dependencies, and aligns with our typical SSO pattern when the business team manages application access.
+- Cons: Roles are not centrally managed in Entra ID.
 
-Once that’s clarified, I can finalize the SSO configuration and respond back to AIO accordingly.
+Option 2: Roles or groups passed from Entra ID
+- Roles or groups are managed in Entra ID and included in the SSO token.
+- AIO consumes those claims to determine user authorization.
+- Pros: Centralized role management and potentially more consistency across applications.
+- Cons: Added complexity and only beneficial if the application and business process support externalized RBAC.
+
+From a bank standards perspective, we generally default to Azure being auth-only unless there is a clear business or operational need to centralize role management.
+
+Once Sandy and Tracy can confirm how access and roles are handled for their team today, I can finalize the SSO configuration and respond back to AIO.
+
+Thanks,  
+Anthony

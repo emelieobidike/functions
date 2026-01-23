@@ -1,100 +1,16 @@
-Perfect — this is exactly enough. I’ve got the full picture now.
-Below is ready-to-paste content for each field in your change request, scoped strictly to AWS work only, written in clean change-management language.
+Good afternoon Dallas,
 
-You can tweak naming/regions/account IDs later, but this will pass CAB as-is.
+Thank you — that makes sense, and I agree we should align with existing standards and how the business team operates today.
 
-⸻
+Based on Trey’s recommendation, the next step would be to understand how Sandy and Tracy’s team currently handles access and roles within AIO. That will help determine whether Azure (Entra ID) should remain authentication-only or whether there’s a real need to pass role information during SSO.
 
-Change Title
+At a high level, the two options are:
+	•	Azure auth-only: Azure is used strictly for sign-in, and Sandy/Tracy’s team manages user access and roles directly within AIO (simpler and most common).
+	•	Azure roles/groups: Roles or groups are managed centrally in Entra ID and passed to AIO during login (more complex, but useful if centralized RBAC is desired).
 
-Implement AWS S3 and SQS Configuration to Forward Security Logs to Onum
+To help guide the decision, it would be helpful to confirm with Sandy and Tracy:
+	•	Are there different user roles in AIO today?
+	•	How is access granted or changed for their team?
+	•	Is access management something they prefer to own within AIO, or would they want it centralized via Azure?
 
-⸻
-
-Description
-
-This change implements AWS-side configurations required to enable secure forwarding of AWS security and audit logs (CloudTrail, CloudWatch, and AWS WAF) to the Onum security analytics platform.
-
-The change includes creation and configuration of Amazon SQS queues, IAM roles and policies, and Amazon S3 event notifications. No changes will be made within the Onum platform itself; Onum configuration will be handled separately by the Information Security team using details produced from this implementation.
-
-⸻
-
-Justification (Why is the change needed?)
-
-This change is required to enable centralized ingestion of AWS security logs into the Onum platform for enhanced monitoring, threat detection, and compliance visibility.
-
-Forwarding CloudTrail, CloudWatch, and WAF logs allows the Information Security team to analyze AWS activity events, security alerts, and web application firewall logs in near real-time. This improves incident detection capabilities and aligns with organizational security monitoring and audit requirements.
-
-⸻
-
-Implementation Plan
-
-Implemented by: IT / Cloud Engineering
-User impact: None (backend-only change)
-
-Steps:
-	1.	Create an Amazon SQS queue in the same AWS region as the target S3 log bucket.
-	2.	Configure the SQS queue access policy to allow the Amazon S3 service to send messages from the specified S3 bucket.
-	3.	Create an IAM role to be assumed by Onum with least-privilege permissions to:
-	•	Read objects and bucket metadata from the S3 log bucket.
-	•	Receive and delete messages from the SQS queue.
-	4.	Configure Amazon S3 Event Notifications on the log bucket to send ObjectCreated events to the SQS queue with appropriate prefix and suffix filters for:
-	•	CloudTrail logs
-	•	CloudWatch logs
-	•	AWS WAF logs
-	5.	Validate that S3 event notifications are successfully delivering messages to the SQS queue.
-	6.	Provide the following information to the Information Security team for Onum configuration:
-	•	SQS Queue URL and ARN
-	•	IAM Role ARN
-	•	AWS Region
-	•	S3 bucket name and log prefixes
-
-No end-user communications are required as there is no user-facing impact.
-
-⸻
-
-Risk and Impact Analysis
-
-Users affected: None
-Systems affected: AWS logging infrastructure only
-
-Risks:
-	•	Misconfiguration could result in logs not being forwarded to the SQS queue.
-	•	IAM permission errors could prevent Onum from accessing required logs.
-
-Mitigation:
-	•	Configuration follows vendor-recommended architecture.
-	•	Changes are non-intrusive and do not modify existing log generation.
-	•	Validation steps will confirm message delivery before handoff.
-
-No downtime or service interruption is expected.
-
-⸻
-
-Backout Plan
-
-If issues are encountered:
-	1.	Disable or remove the S3 Event Notification rules.
-	2.	Detach or delete the IAM role and associated policies.
-	3.	Delete the SQS queue if no longer required.
-
-Rollback can be completed within 15–30 minutes and has no downstream impact on AWS services or applications.
-
-⸻
-
-Test Plan
-	1.	Upload or generate a test log entry in the configured S3 log bucket.
-	2.	Confirm that a corresponding message appears in the SQS queue.
-	3.	Validate that the message references the correct S3 object path.
-	4.	Confirm no errors are logged in AWS related to S3 notifications or SQS permissions.
-
-Testing is limited to AWS validation only; Onum ingestion validation will be performed separately by the Information Security team.
-
-⸻
-
-If you want, next I can:
-	•	Tighten this further for Standard vs Normal change
-	•	Rewrite it in a more conservative CAB tone
-	•	Or tailor it to match your org’s usual “voice” (some places are very picky 😄)
-
-Just say the word.
+Once that’s clarified, I can finalize the SSO configuration and respond back to AIO accordingly.

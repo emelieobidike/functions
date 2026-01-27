@@ -1,26 +1,64 @@
-Good afternoon Dallas,
+Yep — this is a pretty standard low-risk firewall change, so we can fill this cleanly and in “change-board-friendly” language. You can copy/paste the sections below directly into the Change Request.
 
-Yes, that aligns well with my understanding.
+⸻
 
-Based on Trey’s recommendation, the key input we need from Sandy and Tracy is how their team currently manages access and roles within AIO. That will determine whether Azure (Entra ID) should be used strictly for authentication or if there’s value in passing role information as part of SSO.
+Change Title
 
-At a high level, the two options are:
+Open TCP Ports 3740 and 3741 for Stealth Agent Communication
 
-Option 1: Azure used for authentication only (most common / simplest)
-- Azure authenticates users via OpenID Connect and sends standard identity claims (UPN/email, name, object ID).
-- Sandy and Tracy’s team manages user access and roles directly within AIO.
-- Pros: Simpler implementation, fewer dependencies, and aligns with our typical SSO pattern when the business team manages application access.
-- Cons: Roles are not centrally managed in Entra ID.
+⸻
 
-Option 2: Roles or groups passed from Entra ID
-- Roles or groups are managed in Entra ID and included in the SSO token.
-- AIO consumes those claims to determine user authorization.
-- Pros: Centralized role management and potentially more consistency across applications.
-- Cons: Added complexity and only beneficial if the application and business process support externalized RBAC.
+Description
 
-From a bank standards perspective, we generally default to Azure being auth-only unless there is a clear business or operational need to centralize role management.
+This change will open TCP ports 3740 and 3741 on servers STG\SAZE-SSB-DC01 and STG\SAZC-SSB-DC01 to allow communication from FNC\S1STEALTHINT01. This connectivity is required to support administration and upgrade of Stealth intercept agents.
 
-Once Sandy and Tracy can confirm how access and roles are handled for their team today, I can finalize the SSO configuration and respond back to AIO.
+⸻
 
-Thanks,  
-Anthony
+Planning Tab
+
+Justification
+
+This change is required to allow the Stealth administration console hosted on FNC\S1STEALTHINT01 to communicate with Stealth intercept agents installed on STG\SAZE-SSB-DC01 and STG\SAZC-SSB-DC01. Opening TCP ports 3740 and 3741 enables required management and upgrade functions for the agents. Without this change, agent upgrades and ongoing administration cannot be performed.
+
+⸻
+
+Implementation Plan
+	1.	Network/Firewall team will review the request and confirm source and destination servers.
+	2.	Create firewall rules to allow inbound TCP traffic on ports 3740 and 3741 from FNC\S1STEALTHINT01 to:
+	•	STG\SAZE-SSB-DC01
+	•	STG\SAZC-SSB-DC01
+	3.	Apply the firewall rules during the approved change window.
+	4.	Validate connectivity from FNC\S1STEALTHINT01 to both target servers.
+	5.	Confirm Stealth intercept agent communication and perform upgrade validation if required.
+
+Implementation Owner: SSB (Network/Infrastructure team)
+User Communication: No end-user communication required as this is an internal infrastructure change with no user-facing impact.
+
+⸻
+
+Risk and Impact Analysis
+	•	Users affected: None directly.
+	•	Systems affected: Stealth intercept agents on STG\SAZE-SSB-DC01 and STG\SAZC-SSB-DC01.
+	•	Risk: Low.
+	•	Impact if unsuccessful: Stealth agents may be unable to communicate with the administration console, preventing upgrades and management.
+	•	User downtime: None expected.
+
+⸻
+
+Backout Plan
+
+If issues are encountered, the firewall rules allowing TCP ports 3740 and 3741 will be removed. Reverting the change will restore the environment to its prior state. No downstream systems are expected to be impacted. Rollback can be completed within minutes.
+
+⸻
+
+Test Plan
+	•	Validate TCP connectivity from FNC\S1STEALTHINT01 to ports 3740 and 3741 on both target servers.
+	•	Confirm Stealth administration console can successfully communicate with intercept agents.
+	•	Verify no unexpected network or system behavior is observed post-change.
+
+⸻
+
+If you want, I can also:
+	•	Adjust wording to match Normal vs Standard change
+	•	Make it more security-focused (for InfoSec reviewers)
+	•	Shorten it if your org prefers very tight change requests

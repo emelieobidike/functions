@@ -1,57 +1,20 @@
-Ah — thanks for sticking with it. This isn’t you, and it’s not the wording.
-What’s happening is a UI rendering bug with writing blocks: when the block “finalizes,” it collapses spaces in some environments. That’s why it looks fine while typing and then breaks.
-
-Fix: don’t use a writing block here. Below is the same email in plain text, which will preserve spacing correctly when you copy/paste into Outlook, Gmail, or Teams.
-
-⸻
-
-Subject: Action required: TLS 1.3 enforcement for App Services (Deadline: 2 April)
-
-Hi Team,
-
-As part of our security hardening work, we are enforcing TLS 1.3 across all Azure Function Apps and Web Apps.
-
-While many apps have already been updated, some are still outstanding. We are setting a hard deadline of 2 April for completion.
-
-What we need from you
-	•	Please update the apps you own to TLS 1.3 before 2 April
-	•	If no action is taken, we will proceed with the update on your behalf after the deadline
-
-Affected apps
-
-Function Apps
-
-Function App Name	Resource Group	Environment
-
-
-              |               |            
-
-Web Apps
-
-Web App Name	Resource Group	Environment
-
-
-         |               |            
-
-How to make the change
-
-Via Azure Portal
-	•	App Service → Configuration → General settings
-	•	Set Minimum TLS version to 1.3
-	•	Save and restart the app
-
-Via code / IaC
-	•	Ensure your configuration (ARM, Bicep, Terraform, etc.) explicitly sets minTlsVersion = 1.3
-	•	Please also validate that your application code and dependencies support TLS 1.3
-
-If you have concerns or foresee issues meeting the deadline, please let us know as soon as possible.
-
-Thanks,
-Anthony
-
-⸻
-
-If you want, next I can:
-	•	Strip this down even more (ultra-short, exec-friendly)
-	•	Make a “final notice” version for closer to the deadline
-	•	Reformat the tables for Excel or CSV so you can mail-merge cleanly
+{
+  "mode": "All",
+  "policyRule": {
+    "if": {
+      "allOf": [
+        {
+          "field": "type",
+          "equals": "Microsoft.Compute/virtualMachines"
+        },
+        {
+          "field": "Microsoft.Compute/virtualMachines/storageProfile.osDisk.managedDisk.storageAccountType",
+          "equals": "Standard_LRS"
+        }
+      ]
+    },
+    "then": {
+      "effect": "Deny"
+    }
+  }
+}

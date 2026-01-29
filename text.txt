@@ -1,20 +1,70 @@
-{
-  "mode": "All",
-  "policyRule": {
-    "if": {
-      "allOf": [
-        {
-          "field": "type",
-          "equals": "Microsoft.Compute/virtualMachines"
-        },
-        {
-          "field": "Microsoft.Compute/virtualMachines/storageProfile.osDisk.managedDisk.storageAccountType",
-          "equals": "Standard_LRS"
-        }
-      ]
-    },
-    "then": {
-      "effect": "Deny"
-    }
-  }
-}
+Got it 👍 this is a standard infra / security change, so we’ll keep it clean, low-risk, and CAB-friendly. Below is ready-to-paste content for each section of the Change Request based on the Netskope → AWS S3 log streaming requirement.
+
+You can copy each section directly into ServiceNow.
+
+⸻
+
+Change title
+
+Creation of AWS S3 Buckets for Netskope Transaction Log Streaming
+
+⸻
+
+Description
+
+This change provisions two Amazon S3 buckets to support Netskope Transaction Log Streaming. Netskope is deprecating its existing transaction event streaming service and requires customers to stream transaction logs to customer-managed storage targets. These S3 buckets will serve as the destination for Netskope transaction logs to ensure continuity of logging and compliance with vendor requirements.
+
+⸻
+
+Justification – Why is the change needed?
+
+Netskope is phasing out its current transaction event streaming service and transitioning customers to stream transaction logs directly to privately managed storage targets. To maintain uninterrupted transaction logging, monitoring, and compliance visibility, AWS S3 buckets must be created and configured before the service deprecation deadline. Failure to implement this change may result in loss of transaction log data and reduced security monitoring capability.
+
+⸻
+
+Implementation plan
+	1.	Create two AWS S3 buckets in the approved AWS account following corporate naming, tagging, and region standards.
+	2.	Configure bucket settings:
+	•	Enable server-side encryption (SSE).
+	•	Block public access.
+	•	Apply least-privilege bucket policies allowing write access from Netskope only.
+	3.	Configure lifecycle policies as required for log retention.
+	4.	Provide bucket details (name, region, and IAM policy information) to the Netskope configuration team.
+	5.	Validate successful log delivery from Netskope to the S3 buckets.
+
+Implementation owner: SSB / Cloud Engineering
+Vendor involvement: Netskope (log source configuration only)
+User communication: No end-user impact; no user communication required.
+
+⸻
+
+Risk and impact analysis
+	•	People affected: No end users directly affected.
+	•	Groups affected: Security Operations, Cloud Engineering.
+	•	System impact: AWS S3 and Netskope logging integration only.
+	•	Risk if unsuccessful: If misconfigured, transaction logs may not be delivered, resulting in reduced visibility.
+	•	User experience: No user-facing impact.
+	•	Downtime: None expected.
+
+⸻
+
+Backout plan
+
+If issues occur, disable or remove the Netskope configuration pointing to the new S3 buckets. The S3 buckets can be deleted or retained without impacting production systems. Rollback does not affect end users or existing services. Estimated rollback time: < 30 minutes.
+
+⸻
+
+Test plan
+	•	Validate S3 bucket creation and configuration (encryption, access controls, and policies).
+	•	Confirm Netskope successfully delivers transaction logs to the S3 buckets.
+	•	Verify logs are readable and stored as expected.
+	•	No production load testing required, as this is a logging destination only.
+
+⸻
+
+If you want, I can also:
+	•	Tune this to Standard vs Normal change language
+	•	Make it extra CAB-defensive (risk-averse wording)
+	•	Adjust it to match your org’s exact ServiceNow tone
+
+Just say the word.

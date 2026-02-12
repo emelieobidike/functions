@@ -1,20 +1,7 @@
-$policy = @{
-  "ClaimsMappingPolicy" = @{
-    "Version" = 1
-    "IncludeBasicClaimSet" = "true"
-    "ClaimsSchema" = @(
-      @{
-        "Source" = "user"
-        "ID" = "companyName"
-        "JwtClaimType" = "orgdescription"
-      },
-      @{
-        "Source" = "user"
-        "ID" = "groups"
-        "JwtClaimType" = "groupdescription"
-      }
-    )
-  }
-}
-
-New-MgPolicyClaimsMappingPolicy -DisplayName "AIOAxisClaimsMapping" -Definition ($policy | ConvertTo-Json -Depth 10)
+https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/authorize?
+client_id=<CLIENT_ID>
+&response_type=id_token
+&redirect_uri=https://jwt.ms
+&scope=openid profile email
+&response_mode=fragment
+&nonce=12345

@@ -1,7 +1,140 @@
-https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/authorize?
-client_id=<CLIENT_ID>
-&response_type=id_token
-&redirect_uri=https://jwt.ms
-&scope=openid profile email
-&response_mode=fragment
-&nonce=12345
+Perfect — this is a standard change template.
+Below is clean, CAB-ready wording tailored to AWS configuration only and low-risk.
+
+You can copy/paste and adjust names if needed.
+
+⸻
+
+Change Title
+
+Configure AWS S3, SQS, and IAM Role for Netskope Web Transaction Log Streaming to CrowdStrike
+
+⸻
+
+Description
+
+This change implements the AWS configuration required to stream Netskope Web Transaction logs from an existing S3 bucket to CrowdStrike via the CrowdStrike S3 Data Connector.
+
+Scope includes:
+	•	Creation of two Amazon SQS queues
+	•	Configuration of S3 event notifications
+	•	Creation of IAM role for CrowdStrike access
+	•	Application of required IAM trust and permission policies
+
+No existing production workloads will be modified or interrupted.
+
+⸻
+
+Justification – Why is the change needed?
+
+This change enables integration between Netskope and CrowdStrike NG-SIEM to ingest Web Transaction logs for centralized monitoring, threat detection, and security analytics.
+
+The AWS configuration is required to:
+	•	Deliver S3 object creation events to SQS
+	•	Allow CrowdStrike to securely assume an IAM role
+	•	Permit controlled read-only access to the S3 log bucket
+
+This supports security visibility, compliance requirements, and enhanced incident detection.
+
+⸻
+
+Implementation Plan
+
+The change will be implemented by the IT Cloud Services team.
+
+Step 1 – Create SQS Queues
+	•	Create two standard SQS queues:
+	•	Queue 1: Netskope Events & Alerts
+	•	Queue 2: Netskope Web Transaction logs
+	•	Apply SQS access policy allowing s3.amazonaws.com to send messages.
+
+Step 2 – Configure S3 Event Notifications
+	•	Navigate to S3 bucket receiving Netskope logs
+	•	Add event notifications:
+	•	Event type: All object create events
+	•	Prefix: Netskope log folder path
+	•	Destination: Corresponding SQS queue
+	•	Validate notifications are enabled
+
+Step 3 – Create IAM Role for CrowdStrike
+	•	Create IAM role for CrowdStrike S3 Data Connector
+	•	Configure Trust Policy:
+	•	Principal: CrowdStrike AWS account
+	•	Include provided External ID
+	•	Allow sts:AssumeRole
+
+Step 4 – Attach IAM Permissions
+
+Attach policy allowing:
+	•	s3:GetObject on specified object prefix
+	•	s3:ListBucket on S3 bucket
+
+Step 5 – Validation
+	•	Confirm S3 events populate SQS
+	•	Confirm IAM role can be assumed
+	•	Confirm no errors in AWS CloudTrail
+
+No user communication required as this is backend configuration with no end-user impact.
+
+⸻
+
+Risk and Impact Analysis
+
+Affected Users
+
+None. No end users or business units will be directly impacted.
+
+Systems Affected
+	•	AWS S3 (log bucket only)
+	•	AWS SQS (new queues)
+	•	AWS IAM (new role)
+
+Risk Level
+
+Low.
+
+This change:
+	•	Does not modify existing application logic
+	•	Does not alter production traffic flow
+	•	Introduces read-only IAM access
+	•	Can be reversed without service impact
+
+If Unsuccessful
+	•	Logs may not be delivered to CrowdStrike
+	•	No business-facing systems will be impacted
+
+No downtime expected.
+
+⸻
+
+Backout Plan
+
+If issues occur:
+	1.	Remove S3 event notifications.
+	2.	Delete SQS queues.
+	3.	Delete IAM role created for CrowdStrike.
+	4.	Remove associated IAM policies.
+
+Rollback time: ~15–30 minutes
+No downstream impact expected after rollback.
+
+⸻
+
+Test Plan
+
+Testing will include:
+	•	Upload test object into S3 log prefix
+	•	Confirm S3 event triggers SQS message
+	•	Validate CrowdStrike can assume IAM role
+	•	Confirm no permission errors in CloudTrail
+
+Testing is configuration validation only (no production traffic impact).
+
+Evidence (screenshots/log validation) will be attached to the change record.
+
+⸻
+
+If you’d like, I can also:
+	•	Reword this for a Standard Change classification
+	•	Help you classify it (Normal vs Standard vs Emergency)
+	•	Make it shorter if your CAB prefers concise entries

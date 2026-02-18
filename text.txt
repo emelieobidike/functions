@@ -1,62 +1,10 @@
-Got it — here’s a clean, concise version suitable for straightforward SCIM provisioning.
+Connect-MgGraph -Scopes "Application.Read.All"
 
-⸻
+Get-MgServicePrincipal -All | 
+Select-Object DisplayName, AppId, SignInAudience |
+Export-Csv "SSOApps.csv" -NoTypeInformation
 
-Change Title
-
-Enable SCIM Provisioning for AD Group SNOWFLAKE_ONESTREAM_ANALYST in Snowflake
-
-⸻
-
-Description
-
-Configure SCIM provisioning to sync the newly created AD group SNOWFLAKE_ONESTREAM_ANALYST to Snowflake and map it to the appropriate role.
-
-⸻
-
-Justification
-
-To automate user provisioning and deprovisioning for OneStream analysts via Azure AD and align with RBAC standards.
-
-⸻
-
-Implementation Plan
-	1.	Verify AD group exists in Azure AD.
-	2.	Assign group to Snowflake Enterprise Application.
-	3.	Confirm SCIM attribute and role mapping.
-	4.	Trigger provisioning cycle.
-	5.	Validate user creation and role assignment in Snowflake.
-
-No outage expected.
-
-⸻
-
-Risk and Impact Analysis
-
-Risk Level: Low
-Impact: Limited to members of the SNOWFLAKE_ONESTREAM_ANALYST group.
-If unsuccessful, users may not receive access. No impact to existing users or services.
-No downtime expected.
-
-⸻
-
-Backout Plan
-	1.	Remove group assignment from Enterprise Application.
-	2.	Disable provisioning for the group if needed.
-	3.	Remove any incorrectly provisioned users.
-
-Estimated rollback time: <30 minutes.
-
-⸻
-
-Test Plan
-	1.	Add test user to group.
-	2.	Confirm provisioning to Snowflake.
-	3.	Validate correct role assignment.
-	4.	Remove test user and confirm deprovisioning.
-
-Evidence will be attached to the change.
-
-⸻
-
-If you’d like, I can compress it even further into a “minimal CAB-approved” version.
+Get-MgServicePrincipal -All |
+Where-Object {$_.PreferredSingleSignOnMode -ne $null} |
+Select-Object DisplayName, PreferredSingleSignOnMode |
+Export-Csv "ConfiguredSSOApps.csv" -NoTypeInformation

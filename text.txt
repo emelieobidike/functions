@@ -8,3 +8,28 @@ Get-MgServicePrincipal -All |
 Where-Object {$_.PreferredSingleSignOnMode -ne $null} |
 Select-Object DisplayName, PreferredSingleSignOnMode |
 Export-Csv "ConfiguredSSOApps.csv" -NoTypeInformation
+
+$apps = Get-MgServicePrincipal -All
+
+$report = foreach ($app in $apps) {
+
+    $owners = Get-MgServicePrincipalOwner -ServicePrincipalId $app.Id -ErrorAction SilentlyContinue |
+              Where-Object {$_.AdditionalProperties.userPrincipalName} |
+              ForEach-Object {$_.AdditionalProperties.userPrincipalName}
+
+    [PSCustomObject]@{
+        DisplayName              = $app.DisplayName
+        AppId                    = $app.AppId
+        SSOType                  = $app.PreferredSingleSignOnMode
+        AssignmentRequired       = $app.AppRoleAssignmentRequired
+        SignInAudience           = $app.SignInAudience
+        CreatedDate              = $app.CreatedDateTime
+        Owners                   = ($owners -join ", ")
+        Tags                     = ($app.Tags -join ", ")
+    }
+}
+
+$report |
+Where-Object {$_.SSOType -ne $null} |
+Sort-Object DisplayName |
+Export-Csv "Governance_SSO_Inventory.csv" -NoTypeInformation

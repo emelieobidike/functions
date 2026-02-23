@@ -1,3 +1,76 @@
+Got you. Below is brief, clean wording you can paste into each Change Request section for the SAML SSO app (TransPerfect GlobalLink).
+
+⸻
+
+Change Title
+
+SAML SSO Implementation – TransPerfect GlobalLink
+
+⸻
+
+Description
+
+Configure Azure AD SAML SSO integration for TransPerfect GlobalLink. Access will be restricted via an AD Security Group.
+
+⸻
+
+Planning Tab
+
+Justification
+
+Implement SAML SSO to enable secure authentication to TransPerfect GlobalLink using Azure AD. This improves security, centralizes access control, and aligns with enterprise authentication standards.
+
+⸻
+
+Implementation Plan
+	1.	Create Enterprise Application in Azure AD.
+	2.	Configure SAML settings per vendor documentation.
+	3.	Exchange metadata with TransPerfect.
+	4.	Create AD Security Group for authorized users.
+	5.	Assign group to Enterprise Application.
+	6.	Perform validation testing with test users.
+	7.	Enable SSO for production users.
+
+Implementation performed by IAM/SSO team in coordination with vendor.
+
+User communication will be handled by the LOB owner (Tricia Hansen).
+
+⸻
+
+Risk and Impact Analysis
+	•	Impacted Users: GlobalLink users only.
+	•	Risk: Low.
+	•	No expected downtime.
+	•	If unsuccessful, users will continue to authenticate via existing login method.
+	•	No impact to other systems.
+
+⸻
+
+Backout Plan
+
+If issues occur:
+	1.	Disable SAML SSO configuration in Azure AD.
+	2.	Remove group assignment if necessary.
+	3.	Revert to vendor-managed authentication.
+
+Rollback time: ~15–30 minutes.
+
+⸻
+
+Test Plan
+	•	Validate SAML login with test account.
+	•	Confirm correct attribute mapping.
+	•	Verify group-based access restriction.
+	•	Confirm successful login and logout behavior.
+	•	Obtain vendor confirmation of successful assertion.
+
+⸻
+
+If you want, I can also tailor this to match your company’s exact change approval language (e.g., make it sound more CAB-friendly or more technical).
+
+
+
+
 Connect-MgGraph -Scopes "Application.Read.All"
 
 Get-MgServicePrincipal -All | 

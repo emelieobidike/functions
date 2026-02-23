@@ -1,104 +1,22 @@
-Got it — you’re creating a Change Request (CR) to implement OIDC SSO for Certificate Manager – SaaS. Below is a concise, enterprise-ready version you can paste into each section.
-
-⸻
-
-Change Title
-
-Implement OIDC SSO for Certificate Manager – SaaS
-
-⸻
-
-Justification
-
-Enable OAuth 2.0 / OpenID Connect (OIDC) SSO integration between Enterprise IdP and Certificate Manager – SaaS to improve authentication security, centralize access control, and align with corporate SSO standards.
-
-⸻
-
-Implementation Plan
-	1.	Register new OIDC application in Enterprise IdP.
-	2.	Configure redirect URI and required claims per vendor documentation.
-	3.	Exchange client ID/secret securely with vendor.
-	4.	Configure OIDC settings in Certificate Manager – SaaS.
-	5.	Test authentication with pilot user group.
-	6.	Validate role/claim mapping.
-	7.	Enable SSO in production.
-	8.	Monitor authentication logs post-change.
-
-Communication:
-	•	Notify impacted users of SSO enablement and login method change.
-	•	Communication to be sent by IT.
-
-⸻
-
-Risk and Impact Analysis
-	•	Impacted users: All Certificate Manager – SaaS users.
-	•	Risk: Authentication failure if configuration is incorrect.
-	•	User impact: Potential login issues during cutover.
-	•	Downtime: None expected; login method transition only.
-	•	Workaround: Local account login (if retained) or rollback to previous authentication method.
-
-⸻
-
-Backout Plan
-	1.	Disable OIDC configuration in Certificate Manager – SaaS.
-	2.	Revert IdP application configuration.
-	3.	Restore previous authentication method.
-Estimated rollback time: 15–30 minutes.
-
-⸻
-
-Test Plan
-	•	Validate successful login via OIDC.
-	•	Validate failed login for unauthorized users.
-	•	Confirm correct role/claim mapping.
-	•	Test logout and token expiration.
-	•	Testing performed in non-production prior to implementation.
-
-⸻
-
-If you’d like, I can tailor it further depending on:
-	•	Whether you’re using Azure Entra ID specifically
-	•	Whether local accounts will be fully disabled
-	•	Whether this is production-only or phased rollout
-
-
-
-Connect-MgGraph -Scopes "Application.Read.All"
-
-Get-MgServicePrincipal -All | 
-Select-Object DisplayName, AppId, SignInAudience |
-Export-Csv "SSOApps.csv" -NoTypeInformation
-
-Get-MgServicePrincipal -All |
-Where-Object {$_.PreferredSingleSignOnMode -ne $null} |
-Select-Object DisplayName, PreferredSingleSignOnMode |
-Export-Csv "ConfiguredSSOApps.csv" -NoTypeInformation
-
-Install-Module Microsoft.Graph -Scope CurrentUser
-Connect-MgGraph -Scopes "Application.Read.All","Directory.Read.All"
-Select-MgProfile -Name "beta"
-
-$apps = Get-MgServicePrincipal -All
-
-$report = foreach ($app in $apps) {
-
-    $owners = Get-MgServicePrincipalOwner -ServicePrincipalId $app.Id -ErrorAction SilentlyContinue |
-              Where-Object {$_.AdditionalProperties.userPrincipalName} |
-              ForEach-Object {$_.AdditionalProperties.userPrincipalName}
-
-    [PSCustomObject]@{
-        DisplayName              = $app.DisplayName
-        AppId                    = $app.AppId
-        SSOType                  = $app.PreferredSingleSignOnMode
-        AssignmentRequired       = $app.AppRoleAssignmentRequired
-        SignInAudience           = $app.SignInAudience
-        CreatedDate              = $app.CreatedDateTime
-        Owners                   = ($owners -join ", ")
-        Tags                     = ($app.Tags -join ", ")
-    }
+$policy = @{
+  "ClaimsMappingPolicy" = @{
+    "Version" = 1
+    "IncludeBasicClaimSet" = "true"
+    "ClaimsSchema" = @(
+      @{
+        "Source" = "user"
+        "ID" = "companyName"
+        "JwtClaimType" = "companyName"
+      },
+      @{
+        "Source" = "user"
+        "ID" = "description"
+        "JwtClaimType" = "description"
+      }
+    )
+  }
 }
 
-$report |
-Where-Object {$_.SSOType -ne $null} |
-Sort-Object DisplayName |
-Export-Csv "Governance_SSO_Inventory.csv" -NoTypeInformation
+New-MgPolicyClaimMappingPolicy `
+  -DisplayName "AIOAxisClaimsMapping" `
+  -Definition ($policy | ConvertTo-Json -Depth 10)

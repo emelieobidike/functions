@@ -20,3 +20,13 @@ $policy = @{
 New-MgPolicyClaimMappingPolicy `
   -DisplayName "AIOAxisClaimsMapping" `
   -Definition ($policy | ConvertTo-Json -Depth 10)
+
+Get-MgServicePrincipal -Filter "displayName eq 'AssetLending AIO Axis SSO'"
+
+New-MgServicePrincipalClaimMappingPolicyByRef `
+  -ServicePrincipalId <SP_ID> `
+  -BodyParameter @{
+    "@odata.id" = "https://graph.microsoft.com/v1.0/policies/claimsMappingPolicies/<POLICY_ID>"
+  }
+
+

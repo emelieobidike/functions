@@ -1,73 +1,65 @@
-Got you. Below is brief, clean wording you can paste into each Change Request section for the SAML SSO app (TransPerfect GlobalLink).
+Got it — you’re creating a Change Request (CR) to implement OIDC SSO for Certificate Manager – SaaS. Below is a concise, enterprise-ready version you can paste into each section.
 
 ⸻
 
 Change Title
 
-SAML SSO Implementation – TransPerfect GlobalLink
+Implement OIDC SSO for Certificate Manager – SaaS
 
 ⸻
-
-Description
-
-Configure Azure AD SAML SSO integration for TransPerfect GlobalLink. Access will be restricted via an AD Security Group.
-
-⸻
-
-Planning Tab
 
 Justification
 
-Implement SAML SSO to enable secure authentication to TransPerfect GlobalLink using Azure AD. This improves security, centralizes access control, and aligns with enterprise authentication standards.
+Enable OAuth 2.0 / OpenID Connect (OIDC) SSO integration between Enterprise IdP and Certificate Manager – SaaS to improve authentication security, centralize access control, and align with corporate SSO standards.
 
 ⸻
 
 Implementation Plan
-	1.	Create Enterprise Application in Azure AD.
-	2.	Configure SAML settings per vendor documentation.
-	3.	Exchange metadata with TransPerfect.
-	4.	Create AD Security Group for authorized users.
-	5.	Assign group to Enterprise Application.
-	6.	Perform validation testing with test users.
-	7.	Enable SSO for production users.
+	1.	Register new OIDC application in Enterprise IdP.
+	2.	Configure redirect URI and required claims per vendor documentation.
+	3.	Exchange client ID/secret securely with vendor.
+	4.	Configure OIDC settings in Certificate Manager – SaaS.
+	5.	Test authentication with pilot user group.
+	6.	Validate role/claim mapping.
+	7.	Enable SSO in production.
+	8.	Monitor authentication logs post-change.
 
-Implementation performed by IAM/SSO team in coordination with vendor.
-
-User communication will be handled by the LOB owner (Tricia Hansen).
+Communication:
+	•	Notify impacted users of SSO enablement and login method change.
+	•	Communication to be sent by IT.
 
 ⸻
 
 Risk and Impact Analysis
-	•	Impacted Users: GlobalLink users only.
-	•	Risk: Low.
-	•	No expected downtime.
-	•	If unsuccessful, users will continue to authenticate via existing login method.
-	•	No impact to other systems.
+	•	Impacted users: All Certificate Manager – SaaS users.
+	•	Risk: Authentication failure if configuration is incorrect.
+	•	User impact: Potential login issues during cutover.
+	•	Downtime: None expected; login method transition only.
+	•	Workaround: Local account login (if retained) or rollback to previous authentication method.
 
 ⸻
 
 Backout Plan
-
-If issues occur:
-	1.	Disable SAML SSO configuration in Azure AD.
-	2.	Remove group assignment if necessary.
-	3.	Revert to vendor-managed authentication.
-
-Rollback time: ~15–30 minutes.
+	1.	Disable OIDC configuration in Certificate Manager – SaaS.
+	2.	Revert IdP application configuration.
+	3.	Restore previous authentication method.
+Estimated rollback time: 15–30 minutes.
 
 ⸻
 
 Test Plan
-	•	Validate SAML login with test account.
-	•	Confirm correct attribute mapping.
-	•	Verify group-based access restriction.
-	•	Confirm successful login and logout behavior.
-	•	Obtain vendor confirmation of successful assertion.
+	•	Validate successful login via OIDC.
+	•	Validate failed login for unauthorized users.
+	•	Confirm correct role/claim mapping.
+	•	Test logout and token expiration.
+	•	Testing performed in non-production prior to implementation.
 
 ⸻
 
-If you want, I can also tailor this to match your company’s exact change approval language (e.g., make it sound more CAB-friendly or more technical).
-
+If you’d like, I can tailor it further depending on:
+	•	Whether you’re using Azure Entra ID specifically
+	•	Whether local accounts will be fully disabled
+	•	Whether this is production-only or phased rollout
 
 
 

@@ -1,113 +1,19 @@
-# ================================
-# CONFIGURATION
-# ================================
+Hi Jared,
 
-$ManagementGroupName = "mg-visual-studio"
-$TagName             = "PrimaryContact"
-$OverwriteExisting   = $true
-$DryRun              = $false
+I wanted to provide context around the Azure patching control that is currently flagging non-compliance.
 
-Write-Host "Starting tag inheritance process..."
-Write-Host "Management Group: $ManagementGroupName"
-Write-Host "Tag Name: $TagName"
-Write-Host "Overwrite Existing: $OverwriteExisting"
-Write-Host "Dry Run Mode: $DryRun"
-Write-Host "--------------------------------------------"
+Our team is already managing OS patching internally via SCCM, and patch deployment, reporting, and compliance tracking are handled through that platform rather than through Azure Update Manager. From an operational standpoint, we are covering the patching requirement.
 
-# ================================
-# GET SUBSCRIPTIONS
-# ================================
+However, I spoke with Yuday from Security, and he raised a valid concern. If we suppress or exempt the Azure control, we would lose visibility in the Azure portal, which currently provides an independent compliance view. His position is that Azure’s reporting effectively serves as a “second opinion” to validate patch status outside of SCCM.
 
-$subscriptions = Get-AzManagementGroupSubscription -GroupName $ManagementGroupName
+So the decision point seems to be:
 
-foreach ($sub in $subscriptions) {
+- Suppress/Exempt the control – Avoid duplicate reporting but lose Azure-native compliance visibility.
+- Keep the control active – Maintain a secondary validation layer but continue seeing non-compliance alerts tied to Azure’s patching expectations.
 
-    $subscriptionId = ($sub.Id -split "/")[-1]
+From a governance perspective, the question is whether we want Azure to act as a secondary assurance layer, or if SCCM reporting alone is sufficient to satisfy audit and security requirements.
 
-    Write-Host ""
-    Write-Host "============================================"
-    Write-Host "Processing Subscription: $subscriptionId"
-    Write-Host "============================================"
+Let me know how you’d like us to proceed. I’m happy to align with Security if we prefer to maintain the Azure-side visibility.
 
-    try {
-        Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop
-    }
-    catch {
-        Write-Host "❌ Failed to set context. Skipping subscription."
-        continue
-    }
-
-    # Retrieve subscription tags properly
-    try {
-        $tagObject = Get-AzTag -ResourceId "/subscriptions/$subscriptionId" -ErrorAction Stop
-        $allTags   = $tagObject.Properties.TagsProperty
-    }
-    catch {
-        Write-Host "❌ Unable to retrieve subscription tags."
-        continue
-    }
-
-    if (-not $allTags) {
-        Write-Host "⚠ Subscription has no tags."
-        continue
-    }
-
-    # Case-insensitive key match
-    $matchingKey = $allTags.Keys | Where-Object { $_.ToLower() -eq $TagName.ToLower() }
-
-    if (-not $matchingKey) {
-        Write-Host "⚠ Tag '$TagName' not found on subscription."
-        continue
-    }
-
-    $tagValue = $allTags[$matchingKey]
-    Write-Host "✅ Found subscription tag value: $tagValue"
-
-    # ================================
-    # UPDATE RESOURCE GROUPS
-    # ================================
-
-    $resourceGroups = Get-AzResourceGroup
-
-    foreach ($rg in $resourceGroups) {
-
-        Write-Host "Processing RG: $($rg.ResourceGroupName)"
-
-        # Always initialize hashtable
-        $updatedTags = @{}
-
-        # Clone existing tags if present
-        if ($rg.Tags) {
-            $updatedTags = $rg.Tags.Clone()
-        }
-
-        # If tag exists and overwrite disabled, skip
-        if ($updatedTags.ContainsKey($TagName) -and -not $OverwriteExisting) {
-            Write-Host "↪ Tag already exists. Skipping."
-            continue
-        }
-
-        # Apply tag
-        $updatedTags[$TagName] = $tagValue
-
-        if ($DryRun) {
-            Write-Host "🧪 DRY RUN: Would update RG"
-        }
-        else {
-            try {
-                Set-AzResourceGroup `
-                    -Name $rg.ResourceGroupName `
-                    -Tag $updatedTags `
-                    -ErrorAction Stop
-
-                Write-Host "✔ Updated successfully"
-            }
-            catch {
-                Write-Host "❌ Failed to update RG"
-            }
-        }
-    }
-}
-
-Write-Host ""
-Write-Host "=========== PROCESS COMPLETED ==========="
+Thanks,  
+Anthony

@@ -1,32 +1,41 @@
-$policy = @{
-  "ClaimsMappingPolicy" = @{
-    "Version" = 1
-    "IncludeBasicClaimSet" = "true"
-    "ClaimsSchema" = @(
-      @{
-        "Source" = "user"
-        "ID" = "companyName"
-        "JwtClaimType" = "companyName"
-      },
-      @{
-        "Source" = "user"
-        "ID" = "description"
-        "JwtClaimType" = "description"
-      }
-    )
-  }
+# VARIABLES
+$ManagementGroupName = "Your-VisualStudio-MG-Name"
+$TagName = "PrimaryContact"
+
+# Get subscriptions in management group
+$subscriptions = Get-AzManagementGroupSubscription -GroupName $ManagementGroupName
+
+foreach ($sub in $subscriptions) {
+
+    Write-Host "Processing subscription:" $sub.Name
+
+    # Switch context
+    Set-AzContext -SubscriptionId $sub.Id
+
+    # Get subscription object
+    $subscription = Get-AzSubscription -SubscriptionId $sub.Id
+
+    if ($subscription.Tags.ContainsKey($TagName)) {
+
+        $tagValue = $subscription.Tags[$TagName]
+        Write-Host "Found tag value:" $tagValue
+
+        # Get all resource groups
+        $resourceGroups = Get-AzResourceGroup
+
+        foreach ($rg in $resourceGroups) {
+
+            Write-Host "Updating RG:" $rg.ResourceGroupName
+
+            $updatedTags = $rg.Tags
+            $updatedTags[$TagName] = $tagValue
+
+            Set-AzResourceGroup `
+                -Name $rg.ResourceGroupName `
+                -Tag $updatedTags
+        }
+    }
+    else {
+        Write-Host "Tag not found on subscription:" $sub.Name
+    }
 }
-
-New-MgPolicyClaimMappingPolicy `
-  -DisplayName "AIOAxisClaimsMapping" `
-  -Definition ($policy | ConvertTo-Json -Depth 10)
-
-Get-MgServicePrincipal -Filter "displayName eq 'AssetLending AIO Axis SSO'"
-
-New-MgServicePrincipalClaimMappingPolicyByRef `
-  -ServicePrincipalId <SP_ID> `
-  -BodyParameter @{
-    "@odata.id" = "https://graph.microsoft.com/v1.0/policies/claimsMappingPolicies/<POLICY_ID>"
-  }
-
-

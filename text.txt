@@ -2,9 +2,9 @@
 # VARIABLES
 # ============================
 
-$ManagementGroupName = "mg-visual-studio"   # Your MG name
-$TagName = "PrimaryContact"                # Tag to inherit
-$DryRun = $false                           # Change to $true to simulate only
+$ManagementGroupName = "mg-visual-studio"
+$TagName = "PrimaryContact"
+$DryRun = $false
 
 # ============================
 # GET SUBSCRIPTIONS
@@ -14,7 +14,6 @@ $subscriptions = Get-AzManagementGroupSubscription -GroupName $ManagementGroupNa
 
 foreach ($sub in $subscriptions) {
 
-    # Extract real subscription GUID from MG path
     $subscriptionId = ($sub.Id -split "/")[-1]
 
     Write-Host "--------------------------------------------------"
@@ -24,66 +23,47 @@ foreach ($sub in $subscriptions) {
         Set-AzContext -SubscriptionId $subscriptionId -ErrorAction Stop
     }
     catch {
-        Write-Host "❌ Failed to set context for subscription $subscriptionId"
+        Write-Host "❌ Failed to set context"
         continue
     }
 
-    # Get subscription as ARM resource to correctly read tags
+    # Get subscription tag properly
     try {
-        $subResource = Get-AzResource -ResourceId "/subscriptions/$subscriptionId" -ErrorAction Stop
+        $tagObject = Get-AzTag -ResourceId "/subscriptions/$subscriptionId" -ErrorAction Stop
     }
     catch {
-        Write-Host "❌ Could not retrieve subscription resource."
+        Write-Host "❌ Could not retrieve tags for subscription"
         continue
     }
 
-    if (-not $subResource.Tags) {
-        Write-Host "⚠ Subscription has no tags."
+    if (-not $tagObject.Properties.TagsProperty.ContainsKey($TagName)) {
+        Write-Host "⚠ Tag '$TagName' not found on subscription"
         continue
     }
 
-    if (-not $subResource.Tags.ContainsKey($TagName)) {
-        Write-Host "⚠ Tag '$TagName' not found on subscription."
-        continue
-    }
-
-    $tagValue = $subResource.Tags[$TagName]
+    $tagValue = $tagObject.Properties.TagsProperty[$TagName]
     Write-Host "✅ Found tag value: $tagValue"
 
-    # ============================
-    # UPDATE RESOURCE GROUPS
-    # ============================
-
+    # Update resource groups
     $resourceGroups = Get-AzResourceGroup
 
     foreach ($rg in $resourceGroups) {
 
         Write-Host "Updating RG:" $rg.ResourceGroupName
 
-        # Safely handle null tags
         $updatedTags = @{}
         if ($rg.Tags) {
             $updatedTags = $rg.Tags
         }
 
-        # Set or overwrite tag
         $updatedTags[$TagName] = $tagValue
 
         if ($DryRun) {
-            Write-Host "🧪 DRY RUN: Would update RG $($rg.ResourceGroupName)"
+            Write-Host "🧪 DRY RUN: Would update RG"
         }
         else {
-            try {
-                Set-AzResourceGroup `
-                    -Name $rg.ResourceGroupName `
-                    -Tag $updatedTags `
-                    -ErrorAction Stop
-
-                Write-Host "✔ Updated successfully"
-            }
-            catch {
-                Write-Host "❌ Failed to update RG $($rg.ResourceGroupName)"
-            }
+            Set-AzResourceGroup -Name $rg.ResourceGroupName -Tag $updatedTags
+            Write-Host "✔ Updated"
         }
     }
 }

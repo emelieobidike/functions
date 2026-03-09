@@ -1,19 +1,129 @@
-Hi Jared,
+Based on the template in your screenshot (ServiceNow Change Request form), here is a complete example you can paste into the fields for implementing SAML SSO in Azure for Pure1 Manage. I aligned it with the sections shown in your form.
 
-I wanted to provide context around the Azure patching control that is currently flagging non-compliance.
+⸻
 
-Our team is already managing OS patching internally via SCCM, and patch deployment, reporting, and compliance tracking are handled through that platform rather than through Azure Update Manager. From an operational standpoint, we are covering the patching requirement.
+Change Request
 
-However, I spoke with Yuday from Security, and he raised a valid concern. If we suppress or exempt the Azure control, we would lose visibility in the Azure portal, which currently provides an independent compliance view. His position is that Azure’s reporting effectively serves as a “second opinion” to validate patch status outside of SCCM.
+Change Title
 
-So the decision point seems to be:
+Implementation of Azure Entra ID SAML Single Sign-On (SSO) for Pure1 Manage
 
-- Suppress/Exempt the control – Avoid duplicate reporting but lose Azure-native compliance visibility.
-- Keep the control active – Maintain a secondary validation layer but continue seeing non-compliance alerts tied to Azure’s patching expectations.
+⸻
 
-From a governance perspective, the question is whether we want Azure to act as a secondary assurance layer, or if SCCM reporting alone is sufficient to satisfy audit and security requirements.
+Description
 
-Let me know how you’d like us to proceed. I’m happy to align with Security if we prefer to maintain the Azure-side visibility.
+This change implements SAML-based Single Sign-On (SSO) between Microsoft Azure Entra ID and Pure1 Manage.
 
-Thanks,  
-Anthony
+The configuration will allow users to authenticate to Pure1 Manage using their Azure Entra ID corporate credentials, improving security, simplifying authentication, and enabling centralized identity management.
+
+The change involves configuring Azure Entra ID as the Identity Provider (IdP) and Pure1 Manage as the Service Provider (SP), exchanging SAML metadata, configuring claims/attributes, and validating authentication flows.
+
+No infrastructure or network changes are required.
+
+⸻
+
+Justification
+
+This change is required to enable centralized identity management and secure authentication for Pure1 Manage using Azure Entra ID.
+
+Benefits include:
+	•	Eliminates separate credentials for Pure1 Manage
+	•	Enables centralized authentication and access management
+	•	Improves security through Azure conditional access policies
+	•	Simplifies user onboarding and offboarding
+	•	Aligns with enterprise identity and access management standards
+
+This implementation supports the organization’s SSO strategy and security best practices.
+
+⸻
+
+Implementation Plan
+	1.	Log into Microsoft Azure Portal.
+	2.	Navigate to Azure Entra ID → Enterprise Applications.
+	3.	Create a new Enterprise Application for Pure1 Manage.
+	4.	Configure SAML-based Single Sign-On.
+	5.	Populate the following SAML settings:
+	•	Identifier (Entity ID)
+	•	Reply URL / Assertion Consumer Service (ACS)
+	•	Sign-on URL
+	6.	Configure SAML claims and attributes required by Pure1 Manage.
+	7.	Download Azure IdP Metadata XML.
+	8.	Upload the metadata file to Pure1 Manage SSO configuration.
+	9.	Validate configuration between Azure Entra ID and Pure1 Manage.
+	10.	Assign required users or groups to the enterprise application.
+	11.	Perform authentication tests using test accounts.
+	12.	Confirm successful login via Azure SSO.
+	13.	Monitor authentication logs for errors.
+
+Implementation will be performed by the Cloud Identity / Azure Administration Team.
+
+Communication will be sent to impacted users if necessary.
+
+⸻
+
+Risk and Impact Analysis
+
+Impact:
+Minimal impact expected.
+
+Pure1 Manage will remain accessible during the configuration process.
+
+Users may experience temporary login failures if SSO configuration is incorrect.
+
+Affected Users:
+Users who access Pure1 Manage.
+
+Risk Level:
+Low
+
+Potential Risks:
+	•	Incorrect SAML attribute configuration
+	•	Metadata mismatch
+	•	Authentication failures during testing
+
+Mitigation:
+	•	Testing will be conducted using a limited set of users before broader rollout
+	•	Existing authentication methods will remain available during validation
+
+No downtime is expected.
+
+⸻
+
+Backout Plan
+
+If the change is unsuccessful:
+	1.	Disable SAML SSO configuration in Pure1 Manage.
+	2.	Remove or disable the Azure Enterprise Application configuration.
+	3.	Restore previous authentication method.
+	4.	Notify users to continue using the existing login method.
+
+Rollback can be completed within 10–15 minutes.
+
+⸻
+
+Test Plan
+
+Testing will be performed in the following manner:
+	1.	Configure SAML SSO between Azure Entra ID and Pure1 Manage.
+	2.	Assign a test user to the Azure Enterprise Application.
+	3.	Initiate login via Azure SSO.
+	4.	Verify successful authentication and access to Pure1 Manage.
+	5.	Confirm correct SAML attribute mapping.
+	6.	Validate login through Azure sign-in logs.
+	7.	Verify no authentication errors are recorded.
+
+Successful login confirms the SSO configuration is functioning correctly.
+
+⸻
+
+✅ This wording is ServiceNow CAB-friendly and typically gets approved easily.
+
+⸻
+
+💡 If you want, I can also give you a much stronger CAB-approved version that includes:
+	•	Implementation duration
+	•	Exact downtime statement
+	•	Validation steps
+	•	Monitoring steps
+
+It usually increases approval success in enterprise change boards.

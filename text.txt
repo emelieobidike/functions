@@ -17,18 +17,6 @@
 #>
 
 param (
-    # Required: list of subscription IDs to process. Only these subscriptions will be touched.
-    # Replace the placeholder GUIDs below with your actual subscription IDs.
-    [string[]]$TargetSubscriptionIds = @(
-        "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",   # Sub 1 display name
-        "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",   # Sub 2 display name
-        "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",  # Sub 3 display name
-        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",   # Sub 4 display name
-        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",   # Sub 5 display name
-        "cccccccc-cccc-cccc-cccc-cccccccccccc",   # Sub 6 display name
-        "dddddddd-dddd-dddd-dddd-dddddddddddd"    # Sub 7 display name
-    ),
-
     # Optional: restrict to a single resource group across all target subscriptions.
     # Leave empty to process all resource groups in each target subscription.
     [string]$TargetResourceGroupName = "",
@@ -37,9 +25,24 @@ param (
     [bool]$VerboseLogging = $false
 )
 
+#region --- Target Subscription List ---
+# Replace these GUIDs with your 7 actual subscription IDs.
+# Keeping this as a plain array in the script body avoids Azure Automation param-parsing issues.
+$TargetSubscriptionIds = @(
+    "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",   # Sub 1 display name
+    "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",   # Sub 2 display name
+    "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",  # Sub 3 display name
+    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",   # Sub 4 display name
+    "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",   # Sub 5 display name
+    "cccccccc-cccc-cccc-cccc-cccccccccccc",   # Sub 6 display name
+    "dddddddd-dddd-dddd-dddd-dddddddddddd"    # Sub 7 display name
+)
+#endregion
+
 #region --- Authentication ---
 
 Write-Output "=== Tag Inheritance Runbook Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
+Write-Output "Runtime reached. PowerShell version: $($PSVersionTable.PSVersion)"
 
 try {
     Write-Output "Authenticating with Managed Identity..."

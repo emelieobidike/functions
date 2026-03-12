@@ -1,129 +1,205 @@
-Based on the template in your screenshot (ServiceNow Change Request form), here is a complete example you can paste into the fields for implementing SAML SSO in Azure for Pure1 Manage. I aligned it with the sections shown in your form.
+<#
+.SYNOPSIS
+    Syncs tags from Resource Groups to all child resources.
+    Resource tags are fully replaced by their parent Resource Group's tags.
 
-⸻
+.DESCRIPTION
+    This Azure Automation Runbook:
+      - Iterates over a defined list of target subscription IDs
+      - For each Resource Group, retrieves its current tags
+      - Applies those tags (full replace) to every resource within the group
+      - Resources end up with exactly the tags on their Resource Group — no more, no less
 
-Change Request
+.NOTES
+    Authentication : System-assigned or User-assigned Managed Identity
+    Required Role  : Tag Contributor (or Contributor) on each subscription/resource group
+    Recommended    : Schedule once per day
+#>
 
-Change Title
+param (
+    # Required: list of subscription IDs to process. Only these subscriptions will be touched.
+    # Replace the placeholder GUIDs below with your actual subscription IDs.
+    [string[]]$TargetSubscriptionIds = @(
+        "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",   # Sub 1 display name
+        "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",   # Sub 2 display name
+        "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",  # Sub 3 display name
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",   # Sub 4 display name
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",   # Sub 5 display name
+        "cccccccc-cccc-cccc-cccc-cccccccccccc",   # Sub 6 display name
+        "dddddddd-dddd-dddd-dddd-dddddddddddd"    # Sub 7 display name
+    ),
 
-Implementation of Azure Entra ID SAML Single Sign-On (SSO) for Pure1 Manage
+    # Optional: restrict to a single resource group across all target subscriptions.
+    # Leave empty to process all resource groups in each target subscription.
+    [string]$TargetResourceGroupName = "",
 
-⸻
+    # Set to $true to log every resource evaluated, $false for summary only
+    [bool]$VerboseLogging = $false
+)
 
-Description
+#region --- Authentication ---
 
-This change implements SAML-based Single Sign-On (SSO) between Microsoft Azure Entra ID and Pure1 Manage.
+Write-Output "=== Tag Inheritance Runbook Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
 
-The configuration will allow users to authenticate to Pure1 Manage using their Azure Entra ID corporate credentials, improving security, simplifying authentication, and enabling centralized identity management.
+try {
+    Write-Output "Authenticating with Managed Identity..."
+    Connect-AzAccount -Identity -ErrorAction Stop | Out-Null
+    Write-Output "Authentication successful."
+} catch {
+    Write-Error "Authentication failed: $_"
+    throw
+}
 
-The change involves configuring Azure Entra ID as the Identity Provider (IdP) and Pure1 Manage as the Service Provider (SP), exchanging SAML metadata, configuring claims/attributes, and validating authentication flows.
+#endregion
 
-No infrastructure or network changes are required.
+#region --- Validate Subscription List ---
 
-⸻
+if ($TargetSubscriptionIds.Count -eq 0) {
+    Write-Error "TargetSubscriptionIds is empty. Provide at least one subscription ID."
+    throw "No target subscriptions defined."
+}
 
-Justification
+Write-Output "Target subscriptions defined: $($TargetSubscriptionIds.Count)"
 
-This change is required to enable centralized identity management and secure authentication for Pure1 Manage using Azure Entra ID.
+$subscriptions = [System.Collections.Generic.List[object]]::new()
 
-Benefits include:
-	•	Eliminates separate credentials for Pure1 Manage
-	•	Enables centralized authentication and access management
-	•	Improves security through Azure conditional access policies
-	•	Simplifies user onboarding and offboarding
-	•	Aligns with enterprise identity and access management standards
+foreach ($subId in $TargetSubscriptionIds) {
+    try {
+        $sub = Get-AzSubscription -SubscriptionId $subId -ErrorAction Stop
+        if ($sub.State -ne "Enabled") {
+            Write-Warning "Subscription $subId is not in Enabled state (state: $($sub.State)). Skipping."
+            continue
+        }
+        $subscriptions.Add($sub)
+        Write-Output "  Validated: $($sub.Name) [$subId]"
+    } catch {
+        Write-Warning "  Could not retrieve subscription $subId — verify the ID and that the Managed Identity has access: $_"
+    }
+}
 
-This implementation supports the organization’s SSO strategy and security best practices.
+if ($subscriptions.Count -eq 0) {
+    Write-Error "No valid, accessible subscriptions found from the provided list. Aborting."
+    throw "No accessible target subscriptions."
+}
 
-⸻
+Write-Output "Proceeding with $($subscriptions.Count) subscription(s)."
 
-Implementation Plan
-	1.	Log into Microsoft Azure Portal.
-	2.	Navigate to Azure Entra ID → Enterprise Applications.
-	3.	Create a new Enterprise Application for Pure1 Manage.
-	4.	Configure SAML-based Single Sign-On.
-	5.	Populate the following SAML settings:
-	•	Identifier (Entity ID)
-	•	Reply URL / Assertion Consumer Service (ACS)
-	•	Sign-on URL
-	6.	Configure SAML claims and attributes required by Pure1 Manage.
-	7.	Download Azure IdP Metadata XML.
-	8.	Upload the metadata file to Pure1 Manage SSO configuration.
-	9.	Validate configuration between Azure Entra ID and Pure1 Manage.
-	10.	Assign required users or groups to the enterprise application.
-	11.	Perform authentication tests using test accounts.
-	12.	Confirm successful login via Azure SSO.
-	13.	Monitor authentication logs for errors.
+#endregion
 
-Implementation will be performed by the Cloud Identity / Azure Administration Team.
+#region --- Counters ---
 
-Communication will be sent to impacted users if necessary.
+$totalResources   = 0
+$updatedResources = 0
+$skippedResources = 0
+$erroredResources = 0
 
-⸻
+#endregion
 
-Risk and Impact Analysis
+#region --- Main Processing Loop ---
 
-Impact:
-Minimal impact expected.
+foreach ($subscription in $subscriptions) {
 
-Pure1 Manage will remain accessible during the configuration process.
+    Write-Output ""
+    Write-Output "--- Processing Subscription: $($subscription.Name) [$($subscription.Id)] ---"
 
-Users may experience temporary login failures if SSO configuration is incorrect.
+    try {
+        Set-AzContext -SubscriptionId $subscription.Id -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Warning "Could not set context for subscription $($subscription.Id): $_"
+        continue
+    }
 
-Affected Users:
-Users who access Pure1 Manage.
+    # Get resource groups (optionally filtered)
+    try {
+        if ($TargetResourceGroupName) {
+            $resourceGroups = Get-AzResourceGroup -Name $TargetResourceGroupName -ErrorAction Stop
+        } else {
+            $resourceGroups = Get-AzResourceGroup -ErrorAction Stop
+        }
+    } catch {
+        Write-Warning "Could not retrieve resource groups in subscription $($subscription.Id): $_"
+        continue
+    }
 
-Risk Level:
-Low
+    Write-Output "Found $($resourceGroups.Count) resource group(s)."
 
-Potential Risks:
-	•	Incorrect SAML attribute configuration
-	•	Metadata mismatch
-	•	Authentication failures during testing
+    foreach ($rg in $resourceGroups) {
 
-Mitigation:
-	•	Testing will be conducted using a limited set of users before broader rollout
-	•	Existing authentication methods will remain available during validation
+        $rgName = $rg.ResourceGroupName
+        $rgTags = $rg.Tags   # May be $null if no tags are set
 
-No downtime is expected.
+        # Normalise: treat $null as empty hashtable so resources get their tags cleared
+        if ($null -eq $rgTags) {
+            $rgTags = @{}
+        }
 
-⸻
+        Write-Output ""
+        Write-Output "  [RG] $rgName — $($rgTags.Count) tag(s): $(($rgTags.Keys | Sort-Object) -join ', ')"
 
-Backout Plan
+        # Get all resources in this resource group
+        try {
+            $resources = Get-AzResource -ResourceGroupName $rgName -ErrorAction Stop
+        } catch {
+            Write-Warning "  Could not list resources in '$rgName': $_"
+            continue
+        }
 
-If the change is unsuccessful:
-	1.	Disable SAML SSO configuration in Pure1 Manage.
-	2.	Remove or disable the Azure Enterprise Application configuration.
-	3.	Restore previous authentication method.
-	4.	Notify users to continue using the existing login method.
+        foreach ($resource in $resources) {
 
-Rollback can be completed within 10–15 minutes.
+            $totalResources++
 
-⸻
+            # Current tags on the resource (normalise $null → empty hashtable)
+            $currentTags = $resource.Tags
+            if ($null -eq $currentTags) {
+                $currentTags = @{}
+            }
 
-Test Plan
+            # Check whether an update is needed (compare sorted key=value pairs)
+            $currentSnapshot = ($currentTags.GetEnumerator() | Sort-Object Key | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "|"
+            $desiredSnapshot  = ($rgTags.GetEnumerator()     | Sort-Object Key | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "|"
 
-Testing will be performed in the following manner:
-	1.	Configure SAML SSO between Azure Entra ID and Pure1 Manage.
-	2.	Assign a test user to the Azure Enterprise Application.
-	3.	Initiate login via Azure SSO.
-	4.	Verify successful authentication and access to Pure1 Manage.
-	5.	Confirm correct SAML attribute mapping.
-	6.	Validate login through Azure sign-in logs.
-	7.	Verify no authentication errors are recorded.
+            if ($currentSnapshot -eq $desiredSnapshot) {
+                if ($VerboseLogging) {
+                    Write-Output "    [SKIP]    $($resource.ResourceId) — tags already match"
+                }
+                $skippedResources++
+                continue
+            }
 
-Successful login confirms the SSO configuration is functioning correctly.
+            # Apply the resource group's tags, completely replacing whatever was there
+            try {
+                Update-AzTag `
+                    -ResourceId $resource.ResourceId `
+                    -Tag        $rgTags `
+                    -Operation  Replace `
+                    -ErrorAction Stop | Out-Null
 
-⸻
+                if ($VerboseLogging) {
+                    Write-Output "    [UPDATED] $($resource.ResourceId)"
+                }
+                $updatedResources++
 
-✅ This wording is ServiceNow CAB-friendly and typically gets approved easily.
+            } catch {
+                Write-Warning "    [ERROR]   $($resource.ResourceId) — $_"
+                $erroredResources++
+            }
+        }
+    }
+}
 
-⸻
+#endregion
 
-💡 If you want, I can also give you a much stronger CAB-approved version that includes:
-	•	Implementation duration
-	•	Exact downtime statement
-	•	Validation steps
-	•	Monitoring steps
+#region --- Summary ---
 
-It usually increases approval success in enterprise change boards.
+Write-Output ""
+Write-Output "=== Runbook Completed: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
+Write-Output "  Total resources evaluated : $totalResources"
+Write-Output "  Updated                   : $updatedResources"
+Write-Output "  Already in sync (skipped) : $skippedResources"
+Write-Output "  Errors                    : $erroredResources"
+
+if ($erroredResources -gt 0) {
+    Write-Warning "Some resources failed to update. Review warnings above for details."
+}
+
+#endregion

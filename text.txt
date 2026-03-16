@@ -1,119 +1,138 @@
-CLEAR Identity Binding Integration Guide: Microsoft Entra ID
-This document outlines the steps required to complete an application registration for Microsoft Entra ID that will provide account binding to a CLEAR identity. This process provides the foundation for any subsequent integrations that rely on a CLEAR-bound identity.
-Prerequisites for this integration include:
-1. A working Microsoft Entra tenant.
-2. An account with Privileged Authentication Administrator privileges.
-Cloud Tenant Configuration
-Create a new App Registration
-A new App Registration is required to provide IdRamp access to the Entra tenant. The following configuration is required:
-● Account Types: single tenant (step 5 below)
-● API Permissions (steps 13 - 23 below)
-○ Delegated
-■ openid
-■ email
-■ profile
-■ offline_access
-■ User.Read
-■ UserAuthenticationMethod.ReadWrite.All
-○ Application
-■ User.ReadWrite.All
-● Assign a Privileged Authentication Administrator Directory Role (steps 23 - 29 below)
-○ For reference on role permissions please see the MS permission matrix
-Create a new App Registration (step-by-step)
-If you have already completed the creation of the App Registration with the information above, skip this section.
-NOTE: This part only needs to be completed once. If the Create a new App Registration instructions have already been completed, please skip this section.
-1. Sign in to the Microsoft Entra admin center.
-2. Browse to Identity > Applications > App registrations.
-3. Click New Registration.
-4. Set a Name for the Application. (i.e. Account Recovery with IdRamp)
-5. For Supported account types select “Accounts in this organizational directory only”
-6. Click Register. (Leave Redirect URI empty for now.)
-7. On the Overview tab, copy the following details for later:
-a. Application (client) ID
-b. Object ID
-c. Directory (tenant) ID
-8. Within the App Registration, browse to Manage > Certificates & secrets.
-9. Click New client secret.
-10. Set a Description. (i.e. IdRamp)
-11. Set a value for Expires.
-Note: Setting a shorter value will require updating the secret with IdRamp more often.
-12. Copy the Value of the new client secret for use later.
-Note: this value can only be read at creation time. If it is lost, a new client secret will need to be created.
-13. Browse to Manage > API permissions.
-14. Select Add a permission. IdRamp.com
-15. Within the App Registration, browse to Microsoft Graph > Delegated Permissions > OpenId permissions.
-16. Select email, Openid, offline_access, and profile.
-17. Within UserAuthenticationMethod permissions select UserAuthenticationMethod.ReadWrite.All.
-18. Click Add permissions.
-19. Select Add a permission.
-20. Browse to Microsoft Graph > Application Permissions > User.
-21. Select User.ReadWrite.All.
-22. Click Add permissions.
-23. Click Grant admin consent for … and click Yes on the pop-up.
-24. From the top level Entra navigation, browse to Identity > Roles & admins > Roles & admins.
-25. Find and select the Privileged Authentication Administrator role.
-For more information on permissions for sensitive actions please see this page MS Permissions documentation.
-26. Click Add assignments.
-27. Search using either the new App Registration’s Name or App ID.
-28. Select the App Registration.
-29. Click Add.
-Save the App ID, TenantID, ObjectID, and Client Secret attributes for later configuration.
-Configure Directory Extension property
-The password reset process requires users to enroll with verified identity. This will result in their Entra user account being associated with their identity verification. This association value will be stored in a directory extension property for users. This property needs to be created before it can be used.
-Configure a new Directory Extension property (Graph Explorer)
-NOTE: The following instructions are only available if your tenant is part of the Microsoft Azure commercial cloud. If your tenant lives in one of the alternate Microsoft Azure clouds (eg. Microsoft Azure Government), you will need to use the instructions for PowerShell.
-1. Open Microsoft Graph Explorer.
-2. In the upper right corner, select the Sign In icon
-3. Authenticate to the Entra tenant where the App Registration was created above. IdRamp.com
-4. Select POST and specify the following URL, replacing {application ObjectId} with the App Registration’s Object ID (kept from Create a new App Registration above)
-○ https://graph.microsoft.com/v1.0/applications/{application ObjectId}/extensionProperties
-○ Example: https://graph.microsoft.com/v1.0/applications/00000000-0000-0000-0000-000000000000/extensionProperties
-5. Specify the Request body as follows: { "name": "clearVerified", "dataType": "String", "isMultiValued": false, "targetObjects": [ "User" ] }
-6. Click Modify permissions.
-7. Confirm that consent has been provided for at least one of the listed permissions. If not, click Consent next to one of the permissions and follow the prompts.
-8. Click Run query.
-9. If the query is successful, copy the Response and save it for later.
-Configure a new Directory Extension property (PowerShell)
-NOTE: This step only needs to be completed once. If the Graph Explorer instructions have already been completed, please skip this section.
-NOTE: IdRamp provides these instructions for informational purposes. It does not provide support for this part of the process using the Microsoft Graph PowerShell SDK. Information on installation, configuration and authentication can be found at Microsoft. Install the Microsoft Graph PowerShell SDK
-1. Open PowerShell and perform authentication. The action below requires either the “Application.ReadWrite.All” or “Directory.ReadWrite.All” scopes. Connect-MgGraph -Scopes "Application.ReadWrite.All"
-2. Run the following script, replacing {application ObjectId} with the App Registration’s Object ID (kept from Create a new App Registration above): Import-Module Microsoft.Graph.Applications IdRamp.com
-$params = @{ name = "clearVerified" dataType = "String" isMultiValued = $false targetObjects = @("User") } New-MgApplicationExtensionProperty -ApplicationId "{application ObjectId}" -BodyParameter $params
-3. If the query is successful, copy the result and save it for later.
-Configure a new Dynamic Group
-Users enrolled through CLEAR will automatically be added to this group.
-1. Sign in to the Microsoft Entra admin center as at least a Groups Administrator. 2. Browse to Identity > Groups > All groups. 3. Select New group. 4. Set group type to “Security” 5. Enter a group “Name” and “Description” 6. Set “Membership Type” to “Dynamic User” IdRamp.com
-7. Select “add dynamic query” 8. Select “Get custom extension properties” 9. Enter the “application ID” from the new application registration “Overview” page. 10. Select “Refresh properties” 11. Select “clearverfied” from the “property” list 12. Select “Not Equals” from the “Operator” list. Enter “null” in the “Value” field 13. Select “Save”. Then select “Create”. Congratulations, your new dynamic group is now ready to be used.
-Tenants Synchronized with an On-premise Directory with Password Writeback Enabled
-This guide assumes that synchronization is configured and working with Password Writeback enabled. If you require support to enable on-premises Password Writeback, please contact Microsoft support.
-Create a new Privileged Service Account
-Tenants that are synchronized with an on-premises directory require a privileged service account to configure authorization with the on-premises directory. Please follow these steps to create the account: Create a new privileged user account with the following attributes: IdRamp.com
-● We recommend (but do not require) use of the following username: idramp.sspr
-● Set a secure password for this account
-● We recommend disabling password expiration for this account
-● Assign the account directory role to be Privileged Authentication Administrator (steps 24 - 29 above)
-Save the service account Username, and Password for later configuration.
-Configure the IdRamp Entra ID Account Recovery Service
-Creating an Entra ID Account Recovery Service in IdRamp will provide an endpoint for the Entra Application Registration configuration. Additionally, this IdRamp wizard will also create an account recovery URL This Recovery URL is not needed to complete the enrollment process but is created by default by the IdRamp process. To configure the IdRamp Entra ID Account Recovery Service please login to your IdRamp Orchestration dashboard and complete the following steps:
-1. Sign into the IdRamp Orchestration dashboard. Select Services, then Add New.
-2. Enter Display Name and select Account Recovery for MS ENTRA as the service type.
-3. Select Continue to save the service record.
-4. Enter your Microsoft Entra tenant ID, App ID, Object ID, Client Secret from the App Registration steps above, and the name value from the GraphAPI query “Response” in the form field and select save.
-5. Copy the Account Recovery URI and Enrollment URI from the IdRamp service page to complete the configuration with your Entra tenant. Configurations that require On-premise Directory with Password Writeback will also receive an Authorization URI.
-Update the App Registration
-To the App Registration created earlier, add the Redirect URI from the previous step as a Web Redirect URI.
-1. Sign in to the Microsoft Entra admin center.
-2. Browse to Identity > Applications > App registrations.
-3. Find the App Registration created earlier.
-4. Browse to Manage > Authentication.
-5. Under Platform configurations, click Add Platform.
-6. Click Web. IdRamp.com
-7. Copy the Redirect URI returned by IdRamp to the list of Redirect URIs. This URI will look like the following (there will be two URLs for scenarios with on-premise sync):
-a. https://app.idramp.com/openid2/idp/auth/{identifier}
-8. Click Configure.
-On-premise Directory Authorization
-If your configuration requires On-premise Directory with Password Writeback use your new Privileged Service Account to login to the Authorization URI provided from the IdRamp configuration step. This step will authorize the configuration to operate with On-premise Password Writeback.
-Enrollment
-Users will complete a simple enrollment process to verify account ownership. Use the Enrollment URL provided in the IdRamp Account Recovery service configuration to initiate enrollment. You can distribute the Enrollment URL to users through standard business communication channels. During enrollment, users will sign in to Microsoft Entra and complete the identity verification process.
-This process will update the extension attribute with the globally unique CLEAR user identifier, creating the foundation for services such as account recovery or Identity Bound Verified ID issuance.
-IdRamp.com
+Based on the template fields in your screenshot and the CLEAR / IdRamp Entra integration guide, here is a clean, ready-to-paste change request you can use. I wrote it in a way that usually passes CAB review (clear, structured, and low risk).
+
+⸻
+
+Change Request
+
+Change Title
+
+Implementation of CLEAR Identity Binding Integration with Microsoft Entra ID (IdRamp App Registration & Dynamic Group Configuration)
+
+⸻
+
+Description
+
+This change involves configuring Microsoft Entra ID to support CLEAR identity binding integration using IdRamp. The implementation requires creating an Entra App Registration, assigning appropriate Microsoft Graph API permissions, granting the Privileged Authentication Administrator role to the application, creating a directory extension attribute to store CLEAR identity verification data, and configuring a dynamic security group for users verified through CLEAR.
+
+The configuration will enable verified identity binding between CLEAR and Microsoft Entra ID accounts, which will serve as the foundation for identity verification and account recovery workflows through IdRamp.
+
+⸻
+
+Justification
+
+This change is required to enable CLEAR identity verification integration with Microsoft Entra ID. The integration allows users to securely bind their CLEAR verified identity to their Entra account, enabling identity-based verification workflows such as account recovery and secure authentication processes.
+
+Without this configuration, the organization will not be able to utilize CLEAR identity verification services for Entra-based identity recovery and verification mechanisms.
+
+This configuration aligns with security best practices by enabling identity verification while maintaining centralized identity management within Microsoft Entra ID.
+
+⸻
+
+Implementation Plan
+
+The change will be implemented by the Identity / Cloud Engineering team.
+
+Steps
+	1.	Sign in to the Microsoft Entra Admin Center.
+	2.	Navigate to
+Identity → Applications → App Registrations.
+	3.	Create a new App Registration for the CLEAR / IdRamp integration.
+	4.	Configure the application as Single Tenant.
+	5.	Generate a Client Secret for the application.
+	6.	Record the following values for configuration:
+	•	Application (Client) ID
+	•	Object ID
+	•	Tenant ID
+	•	Client Secret
+	7.	Configure Microsoft Graph API Permissions:
+	•	Delegated permissions:
+	•	openid
+	•	email
+	•	profile
+	•	offline_access
+	•	User.Read
+	•	UserAuthenticationMethod.ReadWrite.All
+	•	Application permissions:
+	•	User.ReadWrite.All
+	8.	Grant Admin Consent for the configured permissions.
+	9.	Assign the Privileged Authentication Administrator directory role to the App Registration.
+	10.	Create a Directory Extension Property using Microsoft Graph Explorer to store the CLEAR verification attribute (clearVerified).
+	11.	Create a Dynamic Security Group in Entra ID with membership rule based on the extension attribute indicating CLEAR verified users.
+	12.	Configure the IdRamp Account Recovery Service using the following details:
+
+	•	Tenant ID
+	•	App ID
+	•	Object ID
+	•	Client Secret
+	•	Directory extension attribute
+
+	13.	Add the Redirect URI provided by IdRamp to the App Registration authentication configuration.
+	14.	Validate integration configuration.
+	15.	Distribute the Enrollment URL to users for identity enrollment.
+
+No end-user downtime is expected during implementation.
+
+⸻
+
+Risk and Impact Analysis
+
+Risk Level
+
+Low
+
+Systems Affected
+	•	Microsoft Entra ID
+	•	IdRamp Identity Verification Service
+
+Impact
+
+This change introduces a new integration and does not modify existing authentication flows.
+
+If the change fails:
+	•	The CLEAR integration will not function.
+	•	Existing user authentication and services will remain unaffected.
+
+User Impact
+
+No direct user impact during implementation. Users will only interact with the system when enrolling through the CLEAR verification process after deployment.
+
+Downtime
+
+No downtime expected.
+
+⸻
+
+Backout Plan
+
+If issues are encountered during implementation, the following rollback steps will be performed:
+	1.	Remove the configured Redirect URI from the App Registration.
+	2.	Remove API permissions granted to the application.
+	3.	Remove the Privileged Authentication Administrator role assignment from the application.
+	4.	Delete the Dynamic Security Group created for CLEAR verified users.
+	5.	Delete the Directory Extension Property created for the integration.
+	6.	Disable or delete the App Registration associated with IdRamp.
+
+These actions will fully revert the environment to its previous state.
+
+Estimated rollback time: 10–15 minutes.
+
+⸻
+
+Test Plan
+
+The configuration will be validated using the following tests:
+	1.	Verify successful creation of the App Registration and associated credentials.
+	2.	Confirm Microsoft Graph API permissions are correctly assigned and consented.
+	3.	Validate the Directory Extension Attribute is successfully created.
+	4.	Confirm Dynamic Security Group membership rule evaluates correctly.
+	5.	Verify IdRamp service configuration successfully connects to the Entra tenant.
+	6.	Perform a test enrollment using the IdRamp Enrollment URL.
+	7.	Confirm the CLEAR verification attribute is written to the user account.
+	8.	Validate that users meeting the criteria are automatically added to the dynamic group.
+
+Evidence of successful testing will be attached to the change record.
+
+⸻
+
+✅ If you’d like, I can also give you a shorter CAB-friendly version (some companies reject long change requests).
+Or I can help you fill the Vendor and Schedule sections as well.

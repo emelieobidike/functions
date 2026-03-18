@@ -1,138 +1,16 @@
-Based on the template fields in your screenshot and the CLEAR / IdRamp Entra integration guide, here is a clean, ready-to-paste change request you can use. I wrote it in a way that usually passes CAB review (clear, structured, and low risk).
+Hi Terry,
 
-⸻
+Just a quick follow-up on the TLS 1.3 enforcement for App Services.
 
-Change Request
+As we’re getting closer to the 2 April deadline, I wanted to check on the status of the apps listed in my previous email. They are currently still on TLS 1.2 and will need to be updated to TLS 1.3 before the deadline.
 
-Change Title
+Please let me know if:
+- The updates have already been completed, or  
+- You need any support in making the changes  
 
-Implementation of CLEAR Identity Binding Integration with Microsoft Entra ID (IdRamp App Registration & Dynamic Group Configuration)
+As a reminder, if no action is taken by the deadline, we’ll proceed with enforcing the update.
 
-⸻
+Thanks in advance for your attention to this.
 
-Description
-
-This change involves configuring Microsoft Entra ID to support CLEAR identity binding integration using IdRamp. The implementation requires creating an Entra App Registration, assigning appropriate Microsoft Graph API permissions, granting the Privileged Authentication Administrator role to the application, creating a directory extension attribute to store CLEAR identity verification data, and configuring a dynamic security group for users verified through CLEAR.
-
-The configuration will enable verified identity binding between CLEAR and Microsoft Entra ID accounts, which will serve as the foundation for identity verification and account recovery workflows through IdRamp.
-
-⸻
-
-Justification
-
-This change is required to enable CLEAR identity verification integration with Microsoft Entra ID. The integration allows users to securely bind their CLEAR verified identity to their Entra account, enabling identity-based verification workflows such as account recovery and secure authentication processes.
-
-Without this configuration, the organization will not be able to utilize CLEAR identity verification services for Entra-based identity recovery and verification mechanisms.
-
-This configuration aligns with security best practices by enabling identity verification while maintaining centralized identity management within Microsoft Entra ID.
-
-⸻
-
-Implementation Plan
-
-The change will be implemented by the Identity / Cloud Engineering team.
-
-Steps
-	1.	Sign in to the Microsoft Entra Admin Center.
-	2.	Navigate to
-Identity → Applications → App Registrations.
-	3.	Create a new App Registration for the CLEAR / IdRamp integration.
-	4.	Configure the application as Single Tenant.
-	5.	Generate a Client Secret for the application.
-	6.	Record the following values for configuration:
-	•	Application (Client) ID
-	•	Object ID
-	•	Tenant ID
-	•	Client Secret
-	7.	Configure Microsoft Graph API Permissions:
-	•	Delegated permissions:
-	•	openid
-	•	email
-	•	profile
-	•	offline_access
-	•	User.Read
-	•	UserAuthenticationMethod.ReadWrite.All
-	•	Application permissions:
-	•	User.ReadWrite.All
-	8.	Grant Admin Consent for the configured permissions.
-	9.	Assign the Privileged Authentication Administrator directory role to the App Registration.
-	10.	Create a Directory Extension Property using Microsoft Graph Explorer to store the CLEAR verification attribute (clearVerified).
-	11.	Create a Dynamic Security Group in Entra ID with membership rule based on the extension attribute indicating CLEAR verified users.
-	12.	Configure the IdRamp Account Recovery Service using the following details:
-
-	•	Tenant ID
-	•	App ID
-	•	Object ID
-	•	Client Secret
-	•	Directory extension attribute
-
-	13.	Add the Redirect URI provided by IdRamp to the App Registration authentication configuration.
-	14.	Validate integration configuration.
-	15.	Distribute the Enrollment URL to users for identity enrollment.
-
-No end-user downtime is expected during implementation.
-
-⸻
-
-Risk and Impact Analysis
-
-Risk Level
-
-Low
-
-Systems Affected
-	•	Microsoft Entra ID
-	•	IdRamp Identity Verification Service
-
-Impact
-
-This change introduces a new integration and does not modify existing authentication flows.
-
-If the change fails:
-	•	The CLEAR integration will not function.
-	•	Existing user authentication and services will remain unaffected.
-
-User Impact
-
-No direct user impact during implementation. Users will only interact with the system when enrolling through the CLEAR verification process after deployment.
-
-Downtime
-
-No downtime expected.
-
-⸻
-
-Backout Plan
-
-If issues are encountered during implementation, the following rollback steps will be performed:
-	1.	Remove the configured Redirect URI from the App Registration.
-	2.	Remove API permissions granted to the application.
-	3.	Remove the Privileged Authentication Administrator role assignment from the application.
-	4.	Delete the Dynamic Security Group created for CLEAR verified users.
-	5.	Delete the Directory Extension Property created for the integration.
-	6.	Disable or delete the App Registration associated with IdRamp.
-
-These actions will fully revert the environment to its previous state.
-
-Estimated rollback time: 10–15 minutes.
-
-⸻
-
-Test Plan
-
-The configuration will be validated using the following tests:
-	1.	Verify successful creation of the App Registration and associated credentials.
-	2.	Confirm Microsoft Graph API permissions are correctly assigned and consented.
-	3.	Validate the Directory Extension Attribute is successfully created.
-	4.	Confirm Dynamic Security Group membership rule evaluates correctly.
-	5.	Verify IdRamp service configuration successfully connects to the Entra tenant.
-	6.	Perform a test enrollment using the IdRamp Enrollment URL.
-	7.	Confirm the CLEAR verification attribute is written to the user account.
-	8.	Validate that users meeting the criteria are automatically added to the dynamic group.
-
-Evidence of successful testing will be attached to the change record.
-
-⸻
-
-✅ If you’d like, I can also give you a shorter CAB-friendly version (some companies reject long change requests).
-Or I can help you fill the Vendor and Schedule sections as well.
+Best regards,  
+Yomi

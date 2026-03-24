@@ -1,79 +1,105 @@
-Got it — you’re filling a ServiceNow Change Request for a SAML SSO setup in Azure (Entra ID) for Volante. I’ll map directly to each section in your template so you can paste it in.
+Got it — you’re setting up SAML SSO for qTest in Azure (Entra ID) and need to fill that change request template properly. I’ll give you a clean, ready-to-use version tailored to your screenshots.
 
 ⸻
 
-Justification
+✅ Change Title
 
-The change is required to implement Single Sign-On (SSO) for Volante using Microsoft Entra ID (Azure AD). This will centralize authentication, improve security through conditional access policies, and enhance user experience by enabling seamless login without separate credentials. It also aligns with organizational identity and access management standards.
-
-⸻
-
-Implementation Plan
-	1.	Create an Enterprise Application in Microsoft Entra ID for Volante.
-	2.	Configure SAML-based SSO:
-	•	Set Identifier (Entity ID) and Reply URL (ACS URL) as provided by Volante.
-	•	Configure Sign-On URL if applicable.
-	3.	Download Federation Metadata XML from Entra ID.
-	4.	Share metadata with Volante vendor / upload to Volante admin portal.
-	5.	Configure required claims (e.g., NameID, email, roles if applicable).
-	6.	Assign users/groups to the application.
-	7.	Test SSO with a pilot group.
-	8.	Validate login, logout, and access behavior.
-	9.	Enable for all required users.
-
-Implementation Owner: IT Identity Team
-Communication: Notify impacted users via IT Communications prior to rollout.
+Implementation of SAML Single Sign-On (SSO) for qTest via Microsoft Entra ID
 
 ⸻
 
-Risk and Impact Analysis
-	•	Risk Level: Low
-	•	Impact Scope: Users accessing Volante application
-	•	Potential Issues:
-	•	Misconfiguration of SAML attributes could prevent login
-	•	Incorrect metadata exchange could cause authentication failures
+📝 Description
+
+Implementation of SAML-based Single Sign-On (SSO) integration between qTest and Microsoft Entra ID to enable secure, centralized authentication. This will allow users to access qTest using their corporate credentials, improving security, user experience, and identity governance.
+
+⸻
+
+📌 Justification (Why is the change needed?)
+
+qTest currently requires separate authentication or lacks centralized identity management. Implementing SAML SSO with Microsoft Entra ID will:
+	•	Improve security through centralized authentication and conditional access policies
+	•	Reduce password fatigue and support overhead
+	•	Enable seamless user access using corporate credentials
+	•	Support compliance with identity and access management standards
+
+⸻
+
+⚙️ Implementation Plan
+	1.	Prepare qTest for SSO
+	•	Verify qTest supports SAML 2.0
+	•	Obtain qTest Service Provider (SP) metadata (ACS URL, Entity ID, certificate)
+	2.	Create Enterprise Application in Azure
+	•	Navigate to Entra ID → Enterprise Applications
+	•	Create new Non-gallery application (qTest SSO)
+	3.	Configure SAML in Azure
+	•	Set:
+	•	Identifier (Entity ID)
+	•	Reply URL (ACS URL from qTest)
+	•	Upload or configure signing certificate
+	4.	Download Federation Metadata XML
+	•	Provide metadata to qTest
+	5.	Configure qTest IdP Settings
+	•	Upload Azure metadata
+	•	Map required attributes (e.g. email, name, username)
+	6.	Assign Users/Groups
+	•	Grant access via Entra ID groups
+	7.	Testing
+	•	Perform SSO login tests with pilot users
+	•	Validate authentication and attribute mapping
+	8.	Communication
+	•	Notify users of new SSO login method
+
+⸻
+
+⚠️ Risk and Impact Analysis
+	•	Impact: Users of qTest platform
+	•	Risks:
+	•	Misconfiguration may prevent login
+	•	Incorrect attribute mapping may cause access issues
 	•	Mitigation:
-	•	Testing with pilot users before full rollout
-	•	Retain existing login method during transition
-	•	User Impact:
-	•	Minimal — improved login experience
-	•	No expected downtime
+	•	Test with pilot users before rollout
+	•	Keep local/admin login as fallback
+	•	Downtime: Minimal to none expected
 
 ⸻
 
-Backout Plan
-
-If the change is unsuccessful:
-	1.	Disable SAML SSO configuration in Entra ID.
-	2.	Revert Volante authentication to previous method.
-	3.	Remove user assignments if necessary.
-
-Rollback Time: ~15–30 minutes
-Impact of Rollback: Users revert to previous login method with no data loss.
+🔄 Backout Plan
+	•	Disable SAML SSO configuration in qTest
+	•	Revert users to local authentication
+	•	Remove or disable Azure Enterprise Application
+	•	Rollback time: ~15–30 minutes
 
 ⸻
 
-Test Plan
-	•	Validate SSO login via Entra ID portal
-	•	Test direct login via Volante application
-	•	Verify:
+🧪 Test Plan
+	•	Validate SSO login via Azure portal and direct login
+	•	Confirm:
 	•	Successful authentication
-	•	Correct user attributes/claims
-	•	Proper session handling (login/logout)
-	•	Conduct pilot testing with selected users
-	•	Confirm no access issues before full rollout
+	•	Correct user provisioning/access
+	•	Attribute mapping (email/username)
+	•	Test with multiple user roles
+	•	Attach screenshots/logs as evidence
 
 ⸻
 
-(Optional) Closure / Success Criteria
-	•	Users can successfully log into Volante using Entra ID
-	•	No authentication errors reported
-	•	SSO works consistently across test and production users
-	•	Vendor confirms successful integration
+✅ Success Criteria
+	•	Users can log into qTest via Entra ID without errors
+	•	No authentication failures for assigned users
+	•	Correct user attributes mapped in qTest
+	•	No disruption to existing services
+	•	Helpdesk receives no major incidents post-implementation
 
 ⸻
 
-If you want, I can tailor this further based on:
-	•	Whether Volante is SP-initiated or IdP-initiated
-	•	Exact claims/attributes required
-	•	Your company naming standards for change requests
+🔥 Quick Tip (based on your first screenshot)
+
+qTest specifically requires:
+	•	SP certificate (x509) — make sure it’s updated before config
+	•	Azure metadata XML upload into qTest
+	•	Matching ACS URL + Entity ID exactly (this is where most issues happen)
+
+⸻
+
+If you want, I can also:
+	•	Fill the exact SAML values (Identifier, Reply URL, claims) for qTest
+	•	Or walk you step-by-step in Azure so you don’t miss anything 👍

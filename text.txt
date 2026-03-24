@@ -1,16 +1,79 @@
-Hi Terry,
+Got it — you’re filling a ServiceNow Change Request for a SAML SSO setup in Azure (Entra ID) for Volante. I’ll map directly to each section in your template so you can paste it in.
 
-Just a quick follow-up on the TLS 1.3 enforcement for App Services.
+⸻
 
-As we’re getting closer to the 2 April deadline, I wanted to check on the status of the apps listed in my previous email. They are currently still on TLS 1.2 and will need to be updated to TLS 1.3 before the deadline.
+Justification
 
-Please let me know if:
-- The updates have already been completed, or  
-- You need any support in making the changes  
+The change is required to implement Single Sign-On (SSO) for Volante using Microsoft Entra ID (Azure AD). This will centralize authentication, improve security through conditional access policies, and enhance user experience by enabling seamless login without separate credentials. It also aligns with organizational identity and access management standards.
 
-As a reminder, if no action is taken by the deadline, we’ll proceed with enforcing the update.
+⸻
 
-Thanks in advance for your attention to this.
+Implementation Plan
+	1.	Create an Enterprise Application in Microsoft Entra ID for Volante.
+	2.	Configure SAML-based SSO:
+	•	Set Identifier (Entity ID) and Reply URL (ACS URL) as provided by Volante.
+	•	Configure Sign-On URL if applicable.
+	3.	Download Federation Metadata XML from Entra ID.
+	4.	Share metadata with Volante vendor / upload to Volante admin portal.
+	5.	Configure required claims (e.g., NameID, email, roles if applicable).
+	6.	Assign users/groups to the application.
+	7.	Test SSO with a pilot group.
+	8.	Validate login, logout, and access behavior.
+	9.	Enable for all required users.
 
-Best regards,  
-Yomi
+Implementation Owner: IT Identity Team
+Communication: Notify impacted users via IT Communications prior to rollout.
+
+⸻
+
+Risk and Impact Analysis
+	•	Risk Level: Low
+	•	Impact Scope: Users accessing Volante application
+	•	Potential Issues:
+	•	Misconfiguration of SAML attributes could prevent login
+	•	Incorrect metadata exchange could cause authentication failures
+	•	Mitigation:
+	•	Testing with pilot users before full rollout
+	•	Retain existing login method during transition
+	•	User Impact:
+	•	Minimal — improved login experience
+	•	No expected downtime
+
+⸻
+
+Backout Plan
+
+If the change is unsuccessful:
+	1.	Disable SAML SSO configuration in Entra ID.
+	2.	Revert Volante authentication to previous method.
+	3.	Remove user assignments if necessary.
+
+Rollback Time: ~15–30 minutes
+Impact of Rollback: Users revert to previous login method with no data loss.
+
+⸻
+
+Test Plan
+	•	Validate SSO login via Entra ID portal
+	•	Test direct login via Volante application
+	•	Verify:
+	•	Successful authentication
+	•	Correct user attributes/claims
+	•	Proper session handling (login/logout)
+	•	Conduct pilot testing with selected users
+	•	Confirm no access issues before full rollout
+
+⸻
+
+(Optional) Closure / Success Criteria
+	•	Users can successfully log into Volante using Entra ID
+	•	No authentication errors reported
+	•	SSO works consistently across test and production users
+	•	Vendor confirms successful integration
+
+⸻
+
+If you want, I can tailor this further based on:
+	•	Whether Volante is SP-initiated or IdP-initiated
+	•	Exact claims/attributes required
+	•	Your company naming standards for change requests

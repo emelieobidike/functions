@@ -1,9 +1,11 @@
 Over the past few weeks, the Cloud Platform Engineering team has been actively engaging with application owners to coordinate TLS upgrades across our Function Apps and Web Apps.
 
-This initiative is part of our ongoing commitment to strengthening the security posture of our platform. By moving to more secure TLS versions, we help ensure that data in transit is protected against modern threats and aligned with current industry standards and compliance requirements.
+This initiative is part of our ongoing commitment to strengthening the security posture of our platform. By moving to TLS 1.3, we ensure that data in transit is protected against modern threats while aligning with current industry standards and compliance requirements.
 
-While these upgrades are largely transparent to end users, they are critical in reducing vulnerabilities associated with older protocols. Our team has been working closely with application owners to assess impact, schedule updates, and provide support where needed to ensure a smooth transition.
+To support this effort, we’ve been working closely with application teams to assess impact, schedule upgrades, and provide guidance to ensure a smooth transition.
 
-If you’ve already collaborated with us on this—thank you for your partnership. If not, you may hear from us soon as we continue this rollout.
+As a reminder, there is an active change freeze in place until April 8. Following this, we encourage all application owners to schedule their TLS upgrades at the earliest convenience. For teams that are unable to schedule their changes, the Cloud Platform Engineering team will proceed with upgrading remaining applications to TLS 1.3 starting April 20.
 
-As always, our goal is to keep our platform secure, resilient, and future-ready.
+If you’ve already partnered with us on this—thank you for your collaboration. If not, you may hear from us soon as we continue the rollout.
+
+Our goal remains the same: to keep our platform secure, resilient, and ready for the future.
